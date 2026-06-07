@@ -14,6 +14,19 @@ def _load(name: str, relpath: str):
 
 
 @pytest.fixture
+def csv_append(tmp_path, monkeypatch):
+    """Load audible-backup/scripts/csv-append.py with CSV_PATH redirected
+    at a tmp_path-rooted file. Returned tuple is (module, csv_path)."""
+    csv_path = tmp_path / "books-library.csv"
+    module = _load(
+        "csv_append_under_test",
+        "skills/audible-backup/scripts/csv-append.py",
+    )
+    monkeypatch.setattr(module, "CSV_PATH", str(csv_path))
+    return module, csv_path
+
+
+@pytest.fixture
 def trakt_watch_history():
     """Load trakt-watch-history/scripts/trakt-watch-history.py.
 
