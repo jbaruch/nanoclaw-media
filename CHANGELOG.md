@@ -2,6 +2,10 @@
 
 All notable changes to this tile are documented here.
 
+### Changed — per-skill `agentModel:` tier-down (`jbaruch/nanoclaw#613`)
+
+Pin the cadence skills' models via `agentModel:` frontmatter so they stop defaulting to Opus: **Sonnet** (`claude-sonnet-4-6`) for `entertainment-sync` — it synthesizes watch/read recommendations (its `Skill()`-invoked `recommend-*` sub-skills run in the same spawn, so recommendation quality rides on this model, not Haiku); **Haiku** (`claude-haiku-4-5-20251001`) for `check-watchlist` and `youtube-comment-check` (triage). Part of the #613 Claude tier-down.
+
 ## 0.1.0
 
 ### Added
