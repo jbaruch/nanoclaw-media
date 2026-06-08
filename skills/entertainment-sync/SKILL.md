@@ -2,6 +2,7 @@
 name: entertainment-sync
 description: "Weekly entertainment refresh: pulls Trakt watch history, checks watchlist for releases, runs show + book recs, syncs Audible purchases. Triggers: 'entertainment sync', 'weekly entertainment', 'sync trakt audible recs', 'refresh entertainment'."
 cadence: "0 10 * * 0"
+agentModel: "claude-sonnet-4-6"
 script: "scripts/precheck-entertainment-sync.py"
 ---
 

@@ -2,6 +2,7 @@
 name: check-watchlist
 description: Checks tracked upcoming TV shows in watchlist.json and sends a Telegram notification message via MCP when any have been released. Use when running nightly release checks, monitoring streaming release dates, or checking whether new episodes or shows from a watchlist are now available to watch. Fires nightly via its own scheduled_tasks row (post-#404).
 cadence: "30 9 * * *"
+agentModel: "claude-haiku-4-5-20251001"
 script: "scripts/check-watchlist-precheck.py"
 ---
 

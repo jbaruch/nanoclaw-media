@@ -2,6 +2,7 @@
 name: youtube-comment-check
 description: "Weekly fetch of recent comments on Baruch's YouTube channel; sends a per-video summary if new comments appear, silent otherwise. Triggers: 'check youtube comments', 'youtube comment check', 'fetch youtube comments', 'review channel comments'."
 cadence: "45 10 * * 0"
+agentModel: "claude-haiku-4-5-20251001"
 script: "scripts/precheck-youtube-comment-check.py"
 ---
 
