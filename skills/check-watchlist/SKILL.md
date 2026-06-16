@@ -8,15 +8,17 @@ script: "scripts/check-watchlist-precheck.py"
 
 # Check Watchlist Skill
 
+Process steps in order. Do not skip ahead.
+
 Monitors `/workspace/group/watchlist.json` for upcoming shows and notifies when they release.
 
-## Step 1: Read watchlist
+## Step 1 — Read watchlist
 
 Read `/workspace/group/watchlist.json`. If the file doesn't exist or `tracking` array is empty, exit silently.
 
 Filter to shows where `notified: false` only.
 
-## Step 2: Check release status
+## Step 2 — Check release status
 
 For each unnotified show, do a web search:
 ```
@@ -28,7 +30,7 @@ Determine:
 - **Not yet released**: still in production or announced without air date
 - **Cancelled**: show was cancelled before release
 
-## Step 3: Handle results
+## Step 3 — Handle results
 
 **If released:**
 1. Compose a short notification message (Telegram HTML format):
@@ -46,12 +48,13 @@ Determine:
 1. Update watchlist.json: set `notified: true` and add `"cancelled": true`
 2. Do NOT notify Baruch — a cancelled show is not actionable
 
-## Step 4: Write back
+## Step 4 — Write back
 
 After processing all shows, if any were updated, write the modified watchlist.json back.
 Read the full file first, update only the changed entries, write the complete file back.
 
 ## Notes
+- The precheck date-gates the daily fire so this skill only wakes when a tracked show's release window is plausibly due; far-off shows stay asleep. Reaching Step 1 therefore means at least one show is worth checking — see `skills/check-watchlist/scripts/check-watchlist-precheck.py` module docstring for the wake/no-wake contract and lead window.
 - Runs nightly. One search per unnotified show
 - Only notify for actual releases, not renewals or trailers
 - New season announced without air date = "not yet released"
