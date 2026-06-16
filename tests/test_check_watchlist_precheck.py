@@ -178,7 +178,9 @@ def test_decide_treats_missing_notified_as_already_handled(precheck, tmp_path):
 
 
 def test_decide_no_wake_when_every_unnotified_is_future(precheck, tmp_path):
-    """The exact #2 repro: 5 unnotified shows, all beyond the lead → no wake."""
+    """The #2 repro minus its one due title: the 4 far-future shows, all
+    beyond the lead → no wake. (`I Will Find You`, 6 days out, is the
+    fifth repro entry and is covered by the wake test below.)"""
     path = _write(
         tmp_path,
         {

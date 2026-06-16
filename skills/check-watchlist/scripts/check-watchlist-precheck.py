@@ -136,7 +136,7 @@ def decide(now_utc: datetime, watchlist_path: Path) -> dict:
             due_count += 1
             if isinstance(title, str):
                 due_titles.append(title)
-        elif window is not None:
+        else:
             windows.append(window)
 
     if due_count:
