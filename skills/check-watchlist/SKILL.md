@@ -52,6 +52,7 @@ After processing all shows, if any were updated, write the modified watchlist.js
 Read the full file first, update only the changed entries, write the complete file back.
 
 ## Notes
+- The precheck (`check-watchlist-precheck.py`) date-gates the daily fire: it only wakes this skill when an unnotified show's `expected` release window is within a 7-day lead (or its `expected` is un-parseable). Shows quarters/years out stay asleep, so reaching Step 1 means at least one show is plausibly due.
 - Runs nightly. One search per unnotified show
 - Only notify for actual releases, not renewals or trailers
 - New season announced without air date = "not yet released"
