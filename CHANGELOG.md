@@ -2,17 +2,59 @@
 
 All notable changes to this tile are documented here.
 
+## 0.1.9 — 2026-07-02
+
+### Changed — backfill CHANGELOG entries for all released versions
+
+Versions 0.1.1, 0.1.3, 0.1.4, 0.1.5, and 0.1.6 shipped without CHANGELOG entries, and the 0.1.2 agentModel, 0.1.7, and 0.1.8 audible-fix notes sat un-versioned at the top of this file. Every released version now has a heading; the entries are reconstructed from the merge commits that produced each release. No code change.
+
+## 0.1.8 — 2026-07-02
+
 ### Fixed — audible-backup CSV: map remaining tool output fields (#10)
 
 `map_book()` hardcoded `Language`, `Region`, `Abridged`, and `AYCE`, filled `Short Title`/`Key`/`Product ID` from the wrong source, and left `Book URL`, `Summary`, `Description`, `Publisher`, `Copyright`, `Author URL`, `Series URL`, `File name`, `File Paths`, and `User ID` blank even though the `audible_backup` tool provides all of them. All now map from the tool output, with the previous hardcoded values kept as fallbacks for payloads that omit a field and ASIN retained as the `Key`/`Product ID` fallback. `File Paths` joins the tool's list with `"; "`. `seconds_to_duration()` now returns empty for zero/negative input instead of `00:00:00`.
+
+## 0.1.7 — 2026-07-02
 
 ### Fixed — audible-backup CSV field mapping (#4)
 
 `csv-append.py`'s `map_book()` read nine field names that don't exist in the `audible_backup` tool output (`authors`, `narrators`, `genres`, `rating`, `num_ratings`, `cover_url`, `series_title`, `runtime_length_min`, `is_finished`), leaving those columns blank in `books-library.csv`. Keys now match the real tool schema; `duration` passes through verbatim (HH:MM:SS) with a `seconds`-derived fallback, and `read_status` is recorded verbatim (`Unread`/`Reading`/`Finished`) instead of collapsing to Finished-or-blank. Remaining hardcoded/ignored fields are tracked in #10.
 
+## 0.1.6 — 2026-07-02
+
+### Added — gate language diagnostics in CI with pyright (`jbaruch/nanoclaw-media#5`)
+
+Adopt a pyright zero-findings gate: `pyrightconfig.json` for the skill-bundle layout and a `python -m pyright --warnings skills/ tests/` CI step after ruff, before pytest (`--warnings` fails on warnings too). The first run surfaced 57 findings including a real startup crash — `stamp-cursor.py` in both `entertainment-sync` and `youtube-comment-check` built its argparse description from `__doc__`, which is `None` under `python -OO` — plus test-side typing gaps fixed with a typed `_CommentServer` fixture and explicit `if ...: raise` loader guards, no suppressions. Adds a weekly Dependabot for the pinned dev toolchain.
+
+## 0.1.5 — 2026-07-02
+
+### Changed — refresh coding-policy PR review workflows (`jbaruch/nanoclaw-media#8`)
+
+Upgrade the gh-aw `jbaruch/coding-policy` PR review workflow templates to the latest published version.
+
+## 0.1.4 — 2026-07-01
+
+### Changed — refresh coding-policy PR review workflows (`jbaruch/nanoclaw-media#7`)
+
+Upgrade the gh-aw `jbaruch/coding-policy` PR review workflow templates to the latest published version.
+
+## 0.1.3 — 2026-06-16
+
+### Fixed — date-gate the check-watchlist precheck on the release window (`jbaruch/nanoclaw-media#3`)
+
+Gate the `check-watchlist` precheck on the release window so it only fires when a watched title is actually out.
+
+## 0.1.2 — 2026-06-08
+
 ### Changed — per-skill `agentModel:` tier-down (`jbaruch/nanoclaw#613`)
 
 Pin the cadence skills' models via `agentModel:` frontmatter so they stop defaulting to Opus: **Sonnet** (`claude-sonnet-4-6`) for `entertainment-sync` — it synthesizes watch/read recommendations (its `Skill()`-invoked `recommend-*` sub-skills run in the same spawn, so recommendation quality rides on this model, not Haiku); **Haiku** (`claude-haiku-4-5-20251001`) for `check-watchlist` and `youtube-comment-check` (triage). Part of the #613 Claude tier-down.
+
+## 0.1.1 — 2026-06-07
+
+### Added — script tests omitted from the initial scaffold
+
+Add the script unit tests that were left out of the initial tile scaffold.
 
 ## 0.1.0
 
