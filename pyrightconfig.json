@@ -1,0 +1,10 @@
+{
+  "executionEnvironments": [
+    { "root": "skills/audible-backup", "extraPaths": ["skills/audible-backup"] },
+    { "root": "skills/check-watchlist", "extraPaths": ["skills/check-watchlist"] },
+    { "root": "skills/entertainment-sync", "extraPaths": ["skills/entertainment-sync"] },
+    { "root": "skills/trakt-watch-history", "extraPaths": ["skills/trakt-watch-history"] },
+    { "root": "skills/youtube-comment-check", "extraPaths": ["skills/youtube-comment-check"] },
+    { "root": "tests", "extraPaths": ["skills/audible-backup", "skills/check-watchlist", "skills/entertainment-sync", "skills/trakt-watch-history", "skills/youtube-comment-check"] }
+  ]
+}
