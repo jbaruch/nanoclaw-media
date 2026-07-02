@@ -78,16 +78,26 @@ HEADERS = [
 
 
 def seconds_to_duration(secs):
-    """Convert seconds (int) to HH:MM:00 format."""
-    if not secs:
-        return ""
+    """Convert seconds (int) to HH:MM:00 format; non-positive or
+    non-numeric input → ""."""
     try:
-        mins = int(secs) // 60
+        secs = int(secs)
     except (ValueError, TypeError):
         return ""
+    if secs <= 0:
+        return ""
+    mins = secs // 60
     h = mins // 60
     m = mins % 60
     return f"{h:02d}:{m:02d}:00"
+
+
+def bool_str(val):
+    """Normalize a tool boolean (lowercase string bool, or bool) to
+    the OpenAudible lowercase string convention; empty/missing → "false"."""
+    if val in (None, ""):
+        return "false"
+    return str(val).lower()
 
 
 def map_book(book):
@@ -96,7 +106,7 @@ def map_book(book):
 
     row["ASIN"] = book.get("asin", "")
     row["Title"] = book.get("title", "")
-    row["Short Title"] = book.get("title", "")
+    row["Short Title"] = book.get("title_short") or book.get("title", "")
     row["Author"] = book.get("author", "")
     row["Narrated By"] = book.get("narrated_by", "")
     row["Genre"] = book.get("genre", "")
@@ -109,10 +119,25 @@ def map_book(book):
     # through verbatim; fall back to deriving HH:MM:00 from `seconds`
     # when absent.
     row["Duration"] = book.get("duration") or seconds_to_duration(book.get("seconds"))
-    row["Language"] = "english"
-    row["Region"] = "US"
-    row["Abridged"] = "false"
-    row["AYCE"] = "false"
+    # Tool provides these; hardcoded values remain only as fallbacks
+    # for payloads that omit them
+    row["Language"] = book.get("language") or "english"
+    row["Region"] = book.get("region") or "US"
+    row["Abridged"] = bool_str(book.get("abridged"))
+    row["AYCE"] = bool_str(book.get("ayce"))
+
+    row["Book URL"] = book.get("info_link", "")
+    row["Summary"] = book.get("summary", "")
+    row["Description"] = book.get("description", "")
+    row["Publisher"] = book.get("publisher", "")
+    row["Copyright"] = book.get("copyright", "")
+    row["Author URL"] = book.get("author_link", "")
+    row["Series URL"] = book.get("series_link", "")
+
+    # Populated by the download step; empty on dry-run payloads
+    row["File name"] = book.get("filename", "")
+    row["File Paths"] = "; ".join(book.get("files") or [])
+    row["User ID"] = book.get("user_id", "")
 
     # Purchase date: extract date part if datetime
     pd = book.get("purchase_date", "")
@@ -129,9 +154,10 @@ def map_book(book):
     # M4B path from download
     row["M4B"] = book.get("m4b_path", "")
 
-    # Product ID and Key use ASIN as fallback
-    row["Key"] = book.get("asin", "")
-    row["Product ID"] = book.get("asin", "")
+    # Key and Product ID may be empty until OpenAudible/enrich fills
+    # them; ASIN stays as the fallback
+    row["Key"] = book.get("key") or book.get("asin", "")
+    row["Product ID"] = book.get("product_id") or book.get("asin", "")
 
     return row
 
