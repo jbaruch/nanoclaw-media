@@ -34,7 +34,8 @@ CHANNEL = "UCZ8-VX2SiAIBE7guw7NG-Sg"
 
 def _load():
     spec = importlib.util.spec_from_file_location("fetch_youtube_comments_under_test", SCRIPT_PATH)
-    assert spec is not None and spec.loader is not None, "cannot load module spec"
+    if spec is None or spec.loader is None:
+        raise ImportError("cannot load module spec")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
