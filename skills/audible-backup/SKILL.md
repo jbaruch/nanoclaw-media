@@ -50,26 +50,17 @@ Send a message summarizing what was downloaded. Format:
 N new books added to library (total: M).
 ```
 
-Finish here — the skill is complete.
+Durations in the message are HH:MM — drop the seconds from the tool's
+HH:MM:SS `duration` value.
 
 If nothing new → silence (for scheduled runs). If user-initiated → "No new purchases."
 
+Finish here — the skill is complete.
+
 ## Field Mapping Reference
 
-| CSV Column | JSON Field | Transform |
-|---|---|---|
-| ASIN | asin | as-is |
-| Title | title | as-is |
-| Author | author | as-is |
-| Narrated By | narrated_by | as-is |
-| Genre | genre | as-is |
-| Ave. Rating | rating_average | as-is |
-| Rating Count | rating_count | as-is |
-| Purchase Date | purchase_date | date part only |
-| Release Date | release_date | as-is |
-| Duration | duration (fallback: seconds) | as-is HH:MM:SS; fallback seconds→HH:MM:00 |
-| Series Name | series_name | may be absent |
-| Series Sequence | series_sequence | may be absent |
-| Image URL | image_url | as-is |
-| Read Status | read_status | as-is ("Unread"/"Reading"/"Finished") |
-| M4B | m4b_path | download path |
+The full CSV column ↔ JSON field mapping table lives at:
+
+```text
+skills/audible-backup/field-mapping.md
+```
