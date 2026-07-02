@@ -1,6 +1,6 @@
 # Field Mapping Reference
 
-How `scripts/csv-append.py` maps `audible_backup` tool output JSON fields to
+How `skills/audible-backup/scripts/csv-append.py` maps `audible_backup` tool output JSON fields to
 `books-library.csv` columns.
 
 | CSV Column | JSON Field | Transform |
