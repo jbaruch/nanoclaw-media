@@ -22,6 +22,7 @@ import urllib.parse
 from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
+from typing import cast
 
 import pytest
 
@@ -33,6 +34,7 @@ CHANNEL = "UCZ8-VX2SiAIBE7guw7NG-Sg"
 
 def _load():
     spec = importlib.util.spec_from_file_location("fetch_youtube_comments_under_test", SCRIPT_PATH)
+    assert spec is not None and spec.loader is not None, "cannot load module spec"
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -55,27 +57,47 @@ def _thread(video_id, author, text, when):
     }
 
 
+class _CommentServer(HTTPServer):
+    """HTTPServer carrying the per-test fixture state the handler reads.
+
+    Declaring these as typed attributes (rather than stamping them onto a
+    bare HTTPServer instance) lets pyright resolve `self.server.<attr>`
+    inside the handler."""
+
+    def __init__(self, server_address, handler_class):
+        super().__init__(server_address, handler_class)
+        self.requests_seen: list[tuple[str, dict]] = []
+        self.comment_pages: list[dict] = [{"items": []}]
+        self.comment_idx: int = 0
+        self.videos_response: dict = {"items": []}
+        self.comment_status: int = 200
+        self.comment_error_body: str = ""
+
+
 class _Handler(BaseHTTPRequestHandler):
     def do_GET(self):  # noqa: N802 — BaseHTTPRequestHandler API
+        # self.server is typed as BaseServer by the base handler; narrow it
+        # to the fixture server that actually carries the test state.
+        server = cast(_CommentServer, self.server)
         parsed = urllib.parse.urlparse(self.path)
         endpoint = parsed.path.rsplit("/", 1)[-1]
-        self.server.requests_seen.append((endpoint, urllib.parse.parse_qs(parsed.query)))
+        server.requests_seen.append((endpoint, urllib.parse.parse_qs(parsed.query)))
         if endpoint == "commentThreads":
-            if self.server.comment_status != 200:
+            if server.comment_status != 200:
                 # Error-body path: send the configured status + raw body
                 # (used to prove the API key is redacted from diagnostics).
-                raw = self.server.comment_error_body.encode("utf-8")
-                self.send_response(self.server.comment_status)
+                raw = server.comment_error_body.encode("utf-8")
+                self.send_response(server.comment_status)
                 self.send_header("content-type", "application/json")
                 self.send_header("content-length", str(len(raw)))
                 self.end_headers()
                 self.wfile.write(raw)
                 return
-            idx = min(self.server.comment_idx, len(self.server.comment_pages) - 1)
-            payload = self.server.comment_pages[idx]
-            self.server.comment_idx += 1
+            idx = min(server.comment_idx, len(server.comment_pages) - 1)
+            payload = server.comment_pages[idx]
+            server.comment_idx += 1
         elif endpoint == "videos":
-            payload = self.server.videos_response
+            payload = server.videos_response
         else:
             payload = {}
         body = json.dumps(payload).encode("utf-8")
@@ -85,20 +107,14 @@ class _Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def log_message(self, *args):
+    def log_message(self, format, *args):  # match BaseHTTPRequestHandler.log_message
         return
 
 
 @pytest.fixture
 def server(monkeypatch):
-    httpd = HTTPServer(("127.0.0.1", 0), _Handler)
+    httpd = _CommentServer(("127.0.0.1", 0), _Handler)
     port = httpd.server_address[1]
-    httpd.requests_seen = []
-    httpd.comment_pages = [{"items": []}]
-    httpd.comment_idx = 0
-    httpd.videos_response = {"items": []}
-    httpd.comment_status = 200
-    httpd.comment_error_body = ""
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
     monkeypatch.setenv("YOUTUBE_API_BASE", f"http://127.0.0.1:{port}/youtube/v3")
     monkeypatch.setenv("YOUTUBE_API_KEY", "yt_test")

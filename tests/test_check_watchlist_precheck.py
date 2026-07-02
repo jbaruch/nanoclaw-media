@@ -44,6 +44,7 @@ def precheck():
     spec = importlib.util.spec_from_file_location(
         "check_watchlist_precheck_under_test", REPO_ROOT / SCRIPT_REL
     )
+    assert spec is not None and spec.loader is not None, "cannot load module spec"
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module

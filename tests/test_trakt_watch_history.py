@@ -38,6 +38,7 @@ import json
 import socket
 import urllib.error
 from datetime import datetime, timezone
+from email.message import Message
 
 import pytest
 
@@ -303,7 +304,7 @@ def test_http_error_emits_status_and_bounded_preview(trakt_watch_history, monkey
         url="https://api.trakt.tv/users/me/watched/shows",
         code=502,
         msg="Bad Gateway",
-        hdrs=None,
+        hdrs=Message(),
         fp=io.BytesIO(big_body),
     )
     _patch_urlopen(monkeypatch, {"/users/me/watched/shows": error})
@@ -430,7 +431,7 @@ def test_401_triggers_refresh_grant_and_retries_with_new_token(
             state["shows_call_count"] += 1
             if state["shows_call_count"] == 1:
                 raise urllib.error.HTTPError(
-                    target, 401, "Unauthorized", hdrs=None, fp=io.BytesIO(b"")
+                    target, 401, "Unauthorized", hdrs=Message(), fp=io.BytesIO(b"")
                 )
             return _FakeResponse("[]")
         if "/users/me/" in target:
@@ -488,7 +489,7 @@ def test_401_refresh_persists_new_tokens_to_env_in_place(
             state["shows_call_count"] += 1
             if state["shows_call_count"] == 1:
                 raise urllib.error.HTTPError(
-                    target, 401, "Unauthorized", hdrs=None, fp=io.BytesIO(b"")
+                    target, 401, "Unauthorized", hdrs=Message(), fp=io.BytesIO(b"")
                 )
             return _FakeResponse("[]")
         return _FakeResponse("[]")
@@ -524,7 +525,9 @@ def test_401_with_missing_refresh_creds_surfaces_original_401(
         target = req.full_url
         if "/oauth/token" in target:
             raise AssertionError("refresh grant should NOT fire when refresh creds are absent")
-        raise urllib.error.HTTPError(target, 401, "Unauthorized", hdrs=None, fp=io.BytesIO(b""))
+        raise urllib.error.HTTPError(
+            target, 401, "Unauthorized", hdrs=Message(), fp=io.BytesIO(b"")
+        )
 
     monkeypatch.setattr("urllib.request.urlopen", _fake_urlopen)
     code, out, _ = _run(trakt_watch_history, monkeypatch, capsys)
@@ -546,8 +549,12 @@ def test_401_with_refresh_grant_also_401_surfaces_original_failure(
     def _fake_urlopen(req, timeout=None):
         target = req.full_url
         if "/oauth/token" in target:
-            raise urllib.error.HTTPError(target, 401, "Unauthorized", hdrs=None, fp=io.BytesIO(b""))
-        raise urllib.error.HTTPError(target, 401, "Unauthorized", hdrs=None, fp=io.BytesIO(b""))
+            raise urllib.error.HTTPError(
+                target, 401, "Unauthorized", hdrs=Message(), fp=io.BytesIO(b"")
+            )
+        raise urllib.error.HTTPError(
+            target, 401, "Unauthorized", hdrs=Message(), fp=io.BytesIO(b"")
+        )
 
     monkeypatch.setattr("urllib.request.urlopen", _fake_urlopen)
     code, out, _ = _run_with_refresh_env(
@@ -574,7 +581,9 @@ def test_no_double_retry_on_repeated_401(trakt_watch_history, monkeypatch, capsy
             return _FakeResponse(json.dumps({"access_token": "new", "refresh_token": "new"}))
         if "/users/me/watched/shows" in target:
             state["shows_call_count"] += 1
-            raise urllib.error.HTTPError(target, 401, "Unauthorized", hdrs=None, fp=io.BytesIO(b""))
+            raise urllib.error.HTTPError(
+                target, 401, "Unauthorized", hdrs=Message(), fp=io.BytesIO(b"")
+            )
         return _FakeResponse("[]")
 
     monkeypatch.setattr("urllib.request.urlopen", _fake_urlopen)
@@ -612,7 +621,9 @@ def test_401_without_env_path_does_not_refresh(trakt_watch_history, monkeypatch,
                 "refresh grant must NOT fire when TRAKT_ENV_PATH is absent — "
                 "would burn the rotating refresh token without persistence"
             )
-        raise urllib.error.HTTPError(target, 401, "Unauthorized", hdrs=None, fp=io.BytesIO(b""))
+        raise urllib.error.HTTPError(
+            target, 401, "Unauthorized", hdrs=Message(), fp=io.BytesIO(b"")
+        )
 
     monkeypatch.setattr("urllib.request.urlopen", _fake_urlopen)
     code = 0
@@ -648,15 +659,17 @@ def test_401_refresh_dedups_pre_existing_stacked_token_lines(
         "TAIL_VAR=tail\n"
     )
 
+    fired = [False]
+
     def _fake_urlopen(req, timeout=None):
         target = req.full_url
         if "/oauth/token" in target:
             return _FakeResponse(json.dumps({"access_token": "fresh", "refresh_token": "fresh-r"}))
         if "/users/me/watched/shows" in target:
-            if not getattr(_fake_urlopen, "fired", False):
-                _fake_urlopen.fired = True
+            if not fired[0]:
+                fired[0] = True
                 raise urllib.error.HTTPError(
-                    target, 401, "Unauthorized", hdrs=None, fp=io.BytesIO(b"")
+                    target, 401, "Unauthorized", hdrs=Message(), fp=io.BytesIO(b"")
                 )
             return _FakeResponse("[]")
         return _FakeResponse("[]")
@@ -691,8 +704,12 @@ def test_401_refresh_http_error_surfaces_actionable_stderr_diagnostic(
     def _fake_urlopen(req, timeout=None):
         target = req.full_url
         if "/oauth/token" in target:
-            raise urllib.error.HTTPError(target, 401, "Unauthorized", hdrs=None, fp=io.BytesIO(b""))
-        raise urllib.error.HTTPError(target, 401, "Unauthorized", hdrs=None, fp=io.BytesIO(b""))
+            raise urllib.error.HTTPError(
+                target, 401, "Unauthorized", hdrs=Message(), fp=io.BytesIO(b"")
+            )
+        raise urllib.error.HTTPError(
+            target, 401, "Unauthorized", hdrs=Message(), fp=io.BytesIO(b"")
+        )
 
     monkeypatch.setattr("urllib.request.urlopen", _fake_urlopen)
     code, out, err = _run_with_refresh_env(
@@ -722,7 +739,9 @@ def test_401_refresh_network_error_surfaces_distinct_diagnostic(
         target = req.full_url
         if "/oauth/token" in target:
             raise urllib.error.URLError(reason="Cloudflare 1020 blocked")
-        raise urllib.error.HTTPError(target, 401, "Unauthorized", hdrs=None, fp=io.BytesIO(b""))
+        raise urllib.error.HTTPError(
+            target, 401, "Unauthorized", hdrs=Message(), fp=io.BytesIO(b"")
+        )
 
     monkeypatch.setattr("urllib.request.urlopen", _fake_urlopen)
     code, out, err = _run_with_refresh_env(
@@ -752,7 +771,9 @@ def test_401_refresh_malformed_200_response_surfaces_diagnostic(
         target = req.full_url
         if "/oauth/token" in target:
             return _FakeResponse(b"<html>Cloudflare interstitial</html>")
-        raise urllib.error.HTTPError(target, 401, "Unauthorized", hdrs=None, fp=io.BytesIO(b""))
+        raise urllib.error.HTTPError(
+            target, 401, "Unauthorized", hdrs=Message(), fp=io.BytesIO(b"")
+        )
 
     monkeypatch.setattr("urllib.request.urlopen", _fake_urlopen)
     code, out, err = _run_with_refresh_env(
@@ -779,7 +800,9 @@ def test_401_refresh_200_missing_access_token_surfaces_diagnostic(
         target = req.full_url
         if "/oauth/token" in target:
             return _FakeResponse(json.dumps({"only_refresh": "weirdly-shaped-response"}))
-        raise urllib.error.HTTPError(target, 401, "Unauthorized", hdrs=None, fp=io.BytesIO(b""))
+        raise urllib.error.HTTPError(
+            target, 401, "Unauthorized", hdrs=Message(), fp=io.BytesIO(b"")
+        )
 
     monkeypatch.setattr("urllib.request.urlopen", _fake_urlopen)
     code, out, err = _run_with_refresh_env(
@@ -803,15 +826,17 @@ def test_persist_tokens_normalizes_missing_final_newline(
     # Deliberately no trailing newline on the final line.
     env_path.write_text("OTHER=preserved\nLAST=no-newline-here")
 
+    fired = [False]
+
     def _fake_urlopen(req, timeout=None):
         target = req.full_url
         if "/oauth/token" in target:
             return _FakeResponse(json.dumps({"access_token": "fresh", "refresh_token": "fresh-r"}))
         if "/users/me/watched/shows" in target:
-            if not getattr(_fake_urlopen, "fired", False):
-                _fake_urlopen.fired = True
+            if not fired[0]:
+                fired[0] = True
                 raise urllib.error.HTTPError(
-                    target, 401, "Unauthorized", hdrs=None, fp=io.BytesIO(b"")
+                    target, 401, "Unauthorized", hdrs=Message(), fp=io.BytesIO(b"")
                 )
             return _FakeResponse("[]")
         return _FakeResponse("[]")
