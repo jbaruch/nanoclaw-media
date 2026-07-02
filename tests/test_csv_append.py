@@ -98,6 +98,8 @@ def test_seconds_to_duration_formats_hh_mm(csv_append):
     module, _ = csv_append
     assert module.seconds_to_duration(5400) == "01:30:00"
     assert module.seconds_to_duration(0) == ""
+    assert module.seconds_to_duration("0") == ""
+    assert module.seconds_to_duration(-5400) == ""
     assert module.seconds_to_duration(None) == ""
     assert module.seconds_to_duration("not-a-number") == ""
 
@@ -135,6 +137,72 @@ def test_map_book_reads_actual_tool_output_keys(csv_append, monkeypatch, capsys)
     assert row["Series Name"] == "Real Series"
     assert row["Duration"] == "07:45:00"
     assert row["Read Status"] == "Reading"
+
+
+def test_map_book_maps_issue10_fields(csv_append, monkeypatch, capsys):
+    """Previously hardcoded/ignored fields come from the tool output (issue #10)."""
+    module, csv_path = csv_append
+    books = [
+        {
+            "asin": "ASIN900",
+            "title": "Long Winded Title: A Novel",
+            "title_short": "Long Winded Title",
+            "key": "KEY900",
+            "product_id": "PROD900",
+            "language": "german",
+            "region": "DE",
+            "abridged": "true",
+            "ayce": "true",
+            "info_link": "https://www.audible.com/pd/ASIN900",
+            "summary": "A summary, with commas.",
+            "description": "A description.",
+            "publisher": "Acme Audio",
+            "copyright": "©2026 Acme",
+            "author_link": "https://www.audible.com/author/Some+Author/A1",
+            "series_link": "/series/Real-Series/S1",
+            "filename": "Long_Winded_Title.m4b",
+            "files": ["/library/books/a.m4b", "/library/books/a.jpg"],
+            "user_id": "user-1",
+        }
+    ]
+    _run(module, monkeypatch, capsys, {"books": books})
+    with open(csv_path, encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+    row = rows[0]
+    assert row["Short Title"] == "Long Winded Title"
+    assert row["Key"] == "KEY900"
+    assert row["Product ID"] == "PROD900"
+    assert row["Language"] == "german"
+    assert row["Region"] == "DE"
+    assert row["Abridged"] == "true"
+    assert row["AYCE"] == "true"
+    assert row["Book URL"] == "https://www.audible.com/pd/ASIN900"
+    assert row["Summary"] == "A summary, with commas."
+    assert row["Description"] == "A description."
+    assert row["Publisher"] == "Acme Audio"
+    assert row["Copyright"] == "©2026 Acme"
+    assert row["Author URL"] == "https://www.audible.com/author/Some+Author/A1"
+    assert row["Series URL"] == "/series/Real-Series/S1"
+    assert row["File name"] == "Long_Winded_Title.m4b"
+    assert row["File Paths"] == "/library/books/a.m4b; /library/books/a.jpg"
+    assert row["User ID"] == "user-1"
+
+
+def test_map_book_issue10_fallbacks(csv_append, monkeypatch, capsys):
+    """Absent issue-#10 fields keep the previous defaults and fallbacks."""
+    module, csv_path = csv_append
+    _run(module, monkeypatch, capsys, {"books": [_book("ASIN901", "Only Title")]})
+    with open(csv_path, encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+    row = rows[0]
+    assert row["Short Title"] == "Only Title"
+    assert row["Key"] == "ASIN901"
+    assert row["Product ID"] == "ASIN901"
+    assert row["Language"] == "english"
+    assert row["Region"] == "US"
+    assert row["Abridged"] == "false"
+    assert row["AYCE"] == "false"
+    assert row["File Paths"] == ""
 
 
 def test_duration_falls_back_to_seconds(csv_append, monkeypatch, capsys):
