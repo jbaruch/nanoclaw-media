@@ -31,5 +31,11 @@ jobs:
           python -m ruff check tests/ skills/
           python -m ruff format --check tests/ skills/
 
+      # Type check runs after lint, before tests, per
+      # `jbaruch/coding-policy: language-diagnostics` — the same pyright
+      # engine the editor surfaces, run headless as a zero-findings gate.
+      - name: Type check (pyright)
+        run: python -m pyright skills/ tests/
+
       - name: Pytest
         run: python -m pytest
