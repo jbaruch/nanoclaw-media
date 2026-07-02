@@ -3,9 +3,11 @@ name: audible-backup
 description: Back up new Audible audiobook purchases, decrypt to M4B, and append to books-library.csv. Use on "audible backup", "check new audiobooks", "sync audible library", or from weekly scheduled task.
 ---
 
-**Every step below is mandatory. Execute them in order. Do not skip, reorder, or abbreviate any step.**
+# Audible Backup Skill
 
-## Step 1: Run audible backup dry-run
+Process steps in order. Do not skip ahead.
+
+## Step 1 — Run audible backup dry-run
 
 Call the `mcp__nanoclaw__audible_backup` MCP tool with `dryRun: true`.
 
@@ -13,13 +15,17 @@ Parse the response. If `new_books` is 0 or `books` array is empty, report "No ne
 
 If the tool errors (auth failure, Docker issue), report the error and stop.
 
-## Step 2: Download new books
+Otherwise proceed immediately to Step 2.
+
+## Step 2 — Download new books
 
 If Step 1 found new books, call `mcp__nanoclaw__audible_backup` with `dryRun: false` to download and decrypt them.
 
 Parse the response. Note which books succeeded (`status: "ok"`) and which failed.
 
-## Step 3: Append to CSV
+Proceed immediately to Step 3.
+
+## Step 3 — Append to CSV
 
 For each book with `status: "ok"`, pipe the full backup response JSON to the CSV append script:
 
@@ -29,7 +35,9 @@ echo '<JSON>' | python3 /home/node/.claude/skills/tessl__audible-backup/scripts/
 
 The script deduplicates by ASIN. Outputs JSON summary with `appended` count.
 
-## Step 4: Report results
+Proceed immediately to Step 4.
+
+## Step 4 — Report results
 
 Send a message summarizing what was downloaded. Format:
 
@@ -41,6 +49,8 @@ Send a message summarizing what was downloaded. Format:
 
 N new books added to library (total: M).
 ```
+
+Finish here — the skill is complete.
 
 If nothing new → silence (for scheduled runs). If user-initiated → "No new purchases."
 
