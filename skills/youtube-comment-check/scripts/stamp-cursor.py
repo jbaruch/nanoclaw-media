@@ -86,7 +86,8 @@ def stamp(cursor_path: Path, now_utc: datetime) -> dict:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    doc = __doc__ or ""
+    parser = argparse.ArgumentParser(description=doc.splitlines()[0] if doc else None)
     parser.add_argument(
         "--cursor",
         default=os.environ.get("YOUTUBE_COMMENT_CHECK_CURSOR", DEFAULT_CURSOR_PATH),
