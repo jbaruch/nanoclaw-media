@@ -77,12 +77,12 @@ HEADERS = [
 ]
 
 
-def minutes_to_duration(mins):
-    """Convert runtime_length_min (int) to HH:MM:00 format."""
-    if not mins:
+def seconds_to_duration(secs):
+    """Convert seconds (int) to HH:MM:00 format."""
+    if not secs:
         return ""
     try:
-        mins = int(mins)
+        mins = int(secs) // 60
     except (ValueError, TypeError):
         return ""
     h = mins // 60
@@ -97,15 +97,18 @@ def map_book(book):
     row["ASIN"] = book.get("asin", "")
     row["Title"] = book.get("title", "")
     row["Short Title"] = book.get("title", "")
-    row["Author"] = book.get("authors", "")
-    row["Narrated By"] = book.get("narrators", "")
-    row["Genre"] = book.get("genres", "")
-    row["Ave. Rating"] = str(book.get("rating", ""))
-    row["Rating Count"] = str(book.get("num_ratings", ""))
-    row["Image URL"] = book.get("cover_url", "")
-    row["Series Name"] = book.get("series_title", "")
+    row["Author"] = book.get("author", "")
+    row["Narrated By"] = book.get("narrated_by", "")
+    row["Genre"] = book.get("genre", "")
+    row["Ave. Rating"] = str(book.get("rating_average", ""))
+    row["Rating Count"] = str(book.get("rating_count", ""))
+    row["Image URL"] = book.get("image_url", "")
+    row["Series Name"] = book.get("series_name", "")
     row["Series Sequence"] = book.get("series_sequence", "")
-    row["Duration"] = minutes_to_duration(book.get("runtime_length_min"))
+    # Tool output provides `duration` pre-formatted (HH:MM:SS) — passed
+    # through verbatim; fall back to deriving HH:MM:00 from `seconds`
+    # when absent.
+    row["Duration"] = book.get("duration") or seconds_to_duration(book.get("seconds"))
     row["Language"] = "english"
     row["Region"] = "US"
     row["Abridged"] = "false"
@@ -119,9 +122,9 @@ def map_book(book):
 
     row["Release Date"] = str(book.get("release_date", ""))
 
-    # Read status
-    finished = book.get("is_finished", False)
-    row["Read Status"] = "Finished" if finished else ""
+    # Read status: tool output uses OpenAudible convention
+    # ("Unread" / "Reading" / "Finished") — pass through as-is
+    row["Read Status"] = book.get("read_status", "")
 
     # M4B path from download
     row["M4B"] = book.get("m4b_path", "")

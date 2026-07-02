@@ -36,7 +36,7 @@ def _run(module, monkeypatch, capsys, payload):
 
 
 def _book(asin, title="Some Book", author="Some Author"):
-    return {"asin": asin, "title": title, "authors": author}
+    return {"asin": asin, "title": title, "author": author}
 
 
 def test_empty_books_returns_zero_appended(csv_append, monkeypatch, capsys):
@@ -93,13 +93,58 @@ def test_dedup_within_input_batch(csv_append, monkeypatch, capsys):
     assert rows[0]["Title"] == "First Variant"
 
 
-def test_minutes_to_duration_formats_hh_mm(csv_append):
-    """Pure helper: 90 minutes → "01:30:00"; non-numeric → "" """
+def test_seconds_to_duration_formats_hh_mm(csv_append):
+    """Pure helper: 5400 seconds → "01:30:00"; non-numeric → "" """
     module, _ = csv_append
-    assert module.minutes_to_duration(90) == "01:30:00"
-    assert module.minutes_to_duration(0) == ""
-    assert module.minutes_to_duration(None) == ""
-    assert module.minutes_to_duration("not-a-number") == ""
+    assert module.seconds_to_duration(5400) == "01:30:00"
+    assert module.seconds_to_duration(0) == ""
+    assert module.seconds_to_duration(None) == ""
+    assert module.seconds_to_duration("not-a-number") == ""
+
+
+def test_map_book_reads_actual_tool_output_keys(csv_append, monkeypatch, capsys):
+    """Field names must match the audible_backup tool output (issue #4)."""
+    module, csv_path = csv_append
+    books = [
+        {
+            "asin": "ASIN777",
+            "title": "Mapped Book",
+            "author": "Real Author",
+            "narrated_by": "Real Narrator",
+            "genre": "Sci-Fi",
+            "rating_average": "4.7",
+            "rating_count": "1234",
+            "image_url": "https://img.example/cover.jpg",
+            "series_name": "Real Series",
+            "series_sequence": "2",
+            "duration": "07:45:00",
+            "seconds": 27900,
+            "read_status": "Reading",
+        }
+    ]
+    _run(module, monkeypatch, capsys, {"books": books})
+    with open(csv_path, encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+    row = rows[0]
+    assert row["Author"] == "Real Author"
+    assert row["Narrated By"] == "Real Narrator"
+    assert row["Genre"] == "Sci-Fi"
+    assert row["Ave. Rating"] == "4.7"
+    assert row["Rating Count"] == "1234"
+    assert row["Image URL"] == "https://img.example/cover.jpg"
+    assert row["Series Name"] == "Real Series"
+    assert row["Duration"] == "07:45:00"
+    assert row["Read Status"] == "Reading"
+
+
+def test_duration_falls_back_to_seconds(csv_append, monkeypatch, capsys):
+    """Without a pre-formatted `duration`, derive HH:MM:00 from `seconds`."""
+    module, csv_path = csv_append
+    books = [{"asin": "ASIN778", "title": "Seconds Only", "seconds": 5400}]
+    _run(module, monkeypatch, capsys, {"books": books})
+    with open(csv_path, encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+    assert rows[0]["Duration"] == "01:30:00"
 
 
 def test_purchase_date_iso_strips_time(csv_append, monkeypatch, capsys):
