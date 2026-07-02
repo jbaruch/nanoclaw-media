@@ -20,6 +20,8 @@ def precheck():
     spec = importlib.util.spec_from_file_location(
         "precheck_entertainment_sync_under_test", REPO_ROOT / SCRIPT_REL
     )
+    if spec is None or spec.loader is None:
+        raise ImportError("cannot load module spec")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
