@@ -33,7 +33,7 @@ Pipe the full backup response JSON to the CSV append script:
 echo '<JSON>' | python3 /home/node/.claude/skills/tessl__audible-backup/scripts/csv-append.py
 ```
 
-The script appends only books with `status: "ok"` (failed downloads are excluded and counted in `skipped_failed`) and deduplicates by ASIN. Outputs JSON summary with `appended` count.
+The script decides which books are eligible to append (see `scripts/csv-append.py` — contract in the top-of-file docstring). Outputs a JSON summary: `appended`, `skipped_existing`, `skipped_failed`, `csv_total`, `books`.
 
 Proceed immediately to Step 4.
 
