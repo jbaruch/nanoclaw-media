@@ -19,7 +19,7 @@ Writes fresh `/workspace/group/trakt-history.json`. Skipping recommends already-
 
 - `/workspace/group/netflix-history.csv` — Netflix history. Format: `"Show Name: Season X: Episode Name", "date"` — split on `: `. Single-part titles are movies (skip). Group by show name.
 - `/workspace/group/imdb-ratings.csv` — Explicit ratings (Const, Your Rating 1–10, Title, Title Type, Year, Genres). ~160 entries.
-- `/workspace/group/trakt-history.json` — Trakt watch history. Format: `[{"show": {"title": ...}, "episode": {"season": N, "number": N}, "watched_at": ...}]`. **Refreshed in Step 0 — trust Trakt over CSVs for recency.** On Step 0 failure, Step 1a still applies and Step 5's staleness preamble discloses the age.
+- `/workspace/group/trakt-history.json` — Trakt watch history. Format: object `{"shows": [...], "movies": [...], "stats": {...}, "fetched_at": "ISO timestamp"}`. Each show: `{"title", "year", "trakt_id", "slug", "episodes_watched", "last_watched", "rating"}` — `episodes_watched` is an aggregate count, `last_watched` an ISO timestamp, `rating` Baruch's own 1–10 rating or null. Movies carry the same fields minus `episodes_watched`. **Refreshed in Step 0 — trust Trakt over CSVs for recency.** On Step 0 failure, Step 1a still applies and Step 5's staleness preamble discloses the age.
 - `/workspace/group/watchlist.json` — Upcoming tracked shows. Check before web research (Step 4a).
 
 Filter out kids' content: animated children's shows, preschool series, toy-brand cartoons.
@@ -38,13 +38,13 @@ If Baruch reports "уже видел" for a recommendation, Trakt sync hadn't fi
 
 ## Step 2: Classify shows
 
-For each show, compute `episodes_watched / total_episodes` (search for total if needed). Derive thresholds from actual data distribution before applying these defaults:
+For each show, compute `episodes_watched / total_episodes` — `episodes_watched` comes from the Trakt show entry (fall back to counting grouped Netflix CSV rows for shows absent from Trakt); search for the show's total if needed. Derive thresholds from actual data distribution before applying these defaults:
 
-- **Completed**: ratio > 0.8, or last episode of final season in history. Ongoing "caught up" = no gap in recent seasons.
-- **Abandoned**: ratio < 0.15 AND episodes_watched ≤ 3 AND no return after initial cluster.
+- **Completed**: ratio > 0.8. Ongoing "caught up" = ratio near 1.0 for aired episodes AND `last_watched` recent relative to the airing schedule.
+- **Abandoned**: ratio < 0.15 AND episodes_watched ≤ 3 AND `last_watched` months in the past.
 - **In progress**: Everything else — do not re-recommend unless a new season exists.
 
-Shows with 1–3 plays that never resumed are strong abandonment signals. **IMDB ratings** (imdb-ratings.csv): high-rated genres = confirmed loves; low-rated = genres that don't click.
+Shows with `episodes_watched` ≤ 3 and an old `last_watched` are strong abandonment signals. **Explicit ratings**: Trakt per-item `rating` (shows and movies) plus IMDB ratings (imdb-ratings.csv) — high-rated genres = confirmed loves; low-rated = genres that don't click.
 
 ## Step 3: Taste profile
 
@@ -53,7 +53,7 @@ Derive from data files using Step 2 classifications and IMDB ratings:
 - **Top genres** — most frequent in high-rated, high-completion shows
 - **Avoided genres** — frequent in abandoned or low-rated shows
 - **Style signals** — patterns from comparing completed vs abandoned (language, episode structure, tone)
-- **Quality calibration** — use median and percentiles of Baruch's own IMDB ratings as the floor
+- **Quality calibration** — use median and percentiles of Baruch's own explicit ratings (Trakt `rating` + IMDB) as the floor
 
 **Intermediate output format** (emit before Step 4 to anchor recommendations):
 ```

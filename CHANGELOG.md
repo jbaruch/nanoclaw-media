@@ -2,6 +2,10 @@
 
 All notable changes to this tile are documented here.
 
+### Fixed — recommend-shows: document the current trakt-history.json schema (#24)
+
+The skill described `trakt-history.json` as a flat list of watched-episode events (`show`/`episode`/`watched_at`), but the producer emits an object with `shows`, `movies`, `stats`, and `fetched_at`, carrying per-item aggregates. An agent parsing the old shape misses watched titles and can recommend already-watched shows. The data-source description now matches the producer, classification keys off `shows[*].episodes_watched` and `last_watched`, and Trakt per-item ratings join IMDB in the explicit-rating signals.
+
 ## 0.1.13 — 2026-07-07
 
 ### Fixed — audible-backup: scheduled no-op runs are silent (#26)
