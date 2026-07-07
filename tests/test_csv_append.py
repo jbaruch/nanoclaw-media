@@ -44,7 +44,12 @@ def test_empty_books_returns_zero_appended(csv_append, monkeypatch, capsys):
     code, out, _ = _run(module, monkeypatch, capsys, {"books": []})
     assert code == 0
     payload = json.loads(out)
-    assert payload == {"appended": 0, "skipped_existing": 0, "books": []}
+    assert payload == {
+        "appended": 0,
+        "skipped_existing": 0,
+        "skipped_failed": 0,
+        "books": [],
+    }
     # No CSV created for an empty batch.
     assert not csv_path.exists()
 
@@ -234,3 +239,46 @@ def test_books_without_asin_skipped(csv_append, monkeypatch, capsys):
         rows = list(csv.DictReader(f))
     assert len(rows) == 1
     assert rows[0]["ASIN"] == "ASIN001"
+
+
+def test_failed_downloads_not_appended(csv_append, monkeypatch, capsys):
+    """Mixed ok/failed payload: only status "ok" books land (issue #23).
+
+    A book without a `status` field counts as ok — dry-run payloads
+    carry no status.
+    """
+    module, csv_path = csv_append
+    books = [
+        {**_book("ASIN001", "Good Book"), "status": "ok"},
+        {**_book("ASIN002", "Broken Book"), "status": "failed"},
+        _book("ASIN003", "Statusless Book"),
+    ]
+    code, out, _ = _run(module, monkeypatch, capsys, {"books": books})
+    assert code == 0
+    payload = json.loads(out)
+    assert payload["appended"] == 2
+    assert payload["skipped_failed"] == 1
+    assert payload["skipped_existing"] == 0
+    with open(csv_path, encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+    asins = [r["ASIN"] for r in rows]
+    assert asins == ["ASIN001", "ASIN003"]
+
+
+def test_all_failed_downloads_touch_nothing(csv_append, monkeypatch, capsys):
+    """A payload of only failed books writes no CSV at all (issue #23)."""
+    module, csv_path = csv_append
+    books = [
+        {**_book("ASIN001"), "status": "failed"},
+        {**_book("ASIN002"), "status": "error"},
+    ]
+    code, out, _ = _run(module, monkeypatch, capsys, {"books": books})
+    assert code == 0
+    payload = json.loads(out)
+    assert payload == {
+        "appended": 0,
+        "skipped_existing": 0,
+        "skipped_failed": 2,
+        "books": [],
+    }
+    assert not csv_path.exists()

@@ -3,6 +3,9 @@
 Append new Audible books to books-library.csv.
 
 Reads JSON from stdin (audible_backup tool output).
+Appends only successfully backed-up books: entries whose `status` is
+present and not "ok" (failed download/decrypt) are excluded and counted
+in `skipped_failed`; entries without a `status` field pass through.
 Deduplicates by ASIN against existing CSV rows AND within the input
 payload (duplicate ASINs appearing twice in a single `books` array
 collapse to one row). On a brand-new or empty target CSV, the CSV
@@ -162,6 +165,22 @@ def map_book(book):
     return row
 
 
+def partition_by_status(books):
+    """Split books into (ok, failed) by per-book `status`.
+
+    The backup tool marks each downloaded book with `status: "ok"` or a
+    failure status. A book without a `status` field counts as ok so
+    dry-run payloads (which carry no status) keep working.
+    """
+    ok, failed = [], []
+    for book in books:
+        if book.get("status", "ok") == "ok":
+            ok.append(book)
+        else:
+            failed.append(book)
+    return ok, failed
+
+
 def get_existing_asins(csv_path):
     """Read existing ASINs from CSV."""
     asins = set()
@@ -247,9 +266,18 @@ def append_books_locked(csv_path, books):
 def main():
     data = json.load(sys.stdin)
 
-    books = data.get("books", [])
+    books, failed = partition_by_status(data.get("books", []))
     if not books:
-        print(json.dumps({"appended": 0, "skipped_existing": 0, "books": []}))
+        print(
+            json.dumps(
+                {
+                    "appended": 0,
+                    "skipped_existing": 0,
+                    "skipped_failed": len(failed),
+                    "books": [],
+                }
+            )
+        )
         return
 
     appended, existing_count, skipped = append_books_locked(CSV_PATH, books)
@@ -259,6 +287,7 @@ def main():
             {
                 "appended": len(appended),
                 "skipped_existing": skipped,
+                "skipped_failed": len(failed),
                 "csv_total": existing_count + len(appended),
                 "books": appended,
             }
