@@ -2,6 +2,10 @@
 
 All notable changes to this tile are documented here.
 
+### Fixed — youtube-comment-check tests freeze the clock (#30)
+
+`test_fetch_youtube_comments.py` built recent/old fixture timestamps from the real wall clock, violating the testing-standards determinism rule and letting the 7-day-cutoff boundary drift with run time. `fetch-youtube-comments.py` now reads time through a `_utcnow()` seam; the tests freeze it at a fixed past reference (`FROZEN_NOW`) and derive fixture offsets from it.
+
 ## 0.1.15 — 2026-07-07
 
 ### Fixed — .env.example documents the runtime Trakt and YouTube variables (#28)

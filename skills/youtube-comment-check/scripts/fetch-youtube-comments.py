@@ -94,6 +94,12 @@ def _get(path: str, params: dict, api_key: str) -> dict:
     return body
 
 
+def _utcnow() -> datetime:
+    """Current UTC time; the single clock read, split out so tests can
+    freeze it (coding-policy testing-standards: control the clock)."""
+    return datetime.now(timezone.utc)
+
+
 def _fetch_recent_threads(channel_id: str, cutoff: datetime, api_key: str) -> list:
     """Return top-level comments newer than `cutoff` across the channel.
 
@@ -217,7 +223,7 @@ def main(argv=None) -> int:
         )
         return 2
 
-    cutoff = datetime.now(timezone.utc) - timedelta(days=args.days)
+    cutoff = _utcnow() - timedelta(days=args.days)
     try:
         comments = _fetch_recent_threads(args.channel_id, cutoff, api_key)
         titles = _fetch_titles(sorted({c["video_id"] for c in comments if c["video_id"]}), api_key)

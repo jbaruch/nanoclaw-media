@@ -10,9 +10,10 @@ Locks down the native YouTube Data API v3 fetch contract (nanoclaw-admin#339):
   - pagination follows nextPageToken
 
 The script reads YOUTUBE_API_BASE from the env, so a local fixture
-server stands in for googleapis.com. Window timestamps are computed
-relative to now (recent = now-1h, old = now-8d) so the 7-day filter is
-exercised deterministically without freezing the clock.
+server stands in for googleapis.com. The script's clock is frozen at
+FROZEN_NOW via its `_utcnow` seam, and window fixtures are fixed
+offsets from it (recent = FROZEN_NOW-1h, old = FROZEN_NOW-8d), so the
+7-day filter is exercised with no dependence on the real wall clock.
 """
 
 import importlib.util
@@ -31,6 +32,10 @@ SCRIPT_PATH = REPO_ROOT / "skills/youtube-comment-check/scripts/fetch-youtube-co
 
 CHANNEL = "UCZ8-VX2SiAIBE7guw7NG-Sg"
 
+# Fixed reference "now" — a past date, never the real clock
+# (coding-policy testing-standards: control the clock).
+FROZEN_NOW = datetime(2026, 6, 15, 12, 0, 0, tzinfo=timezone.utc)
+
 
 def _load():
     spec = importlib.util.spec_from_file_location("fetch_youtube_comments_under_test", SCRIPT_PATH)
@@ -38,6 +43,11 @@ def _load():
         raise ImportError("cannot load module spec")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
+    # Freeze the script's clock for every test; the module object is a
+    # per-test throwaway, so the assignment needs no teardown. setattr
+    # (not plain assignment, hence the B010 suppression) is what lets
+    # pyright accept the dynamically-loaded module's unknown attribute.
+    setattr(module, "_utcnow", lambda: FROZEN_NOW)  # noqa: B010
     return module
 
 
@@ -133,9 +143,8 @@ def _run(module, capsys):
 
 
 def test_groups_recent_comments_by_video_and_filters_old(server, capsys):
-    now = datetime.now(timezone.utc)
-    recent = now - timedelta(hours=1)
-    old = now - timedelta(days=8)
+    recent = FROZEN_NOW - timedelta(hours=1)
+    old = FROZEN_NOW - timedelta(days=8)
     server.comment_pages = [
         {
             "items": [
@@ -181,8 +190,7 @@ def test_quiet_week_is_success_with_zero_count(server, capsys):
 
 
 def test_pagination_follows_next_page_token(server, capsys):
-    now = datetime.now(timezone.utc)
-    recent = now - timedelta(hours=2)
+    recent = FROZEN_NOW - timedelta(hours=2)
     server.comment_pages = [
         {"items": [_thread("vid1", "A", "one", recent)], "nextPageToken": "PAGE2"},
         {"items": [_thread("vid1", "B", "two", recent)]},
@@ -197,8 +205,7 @@ def test_pagination_follows_next_page_token(server, capsys):
 
 
 def test_page_cap_truncation_fails_without_advancing(server, capsys):
-    now = datetime.now(timezone.utc)
-    recent = now - timedelta(hours=1)
+    recent = FROZEN_NOW - timedelta(hours=1)
     # Every page returns a nextPageToken → the loop exhausts the cap with a
     # token still pending. A partial fetch must fail (exit 1, no stdout) so
     # the skill does NOT stamp its success cursor and retries.
@@ -233,8 +240,7 @@ def test_api_error_envelope_exits_1(server, capsys):
 
 
 def test_videos_list_chunks_over_50_ids(server, capsys):
-    now = datetime.now(timezone.utc)
-    recent = now - timedelta(hours=1)
+    recent = FROZEN_NOW - timedelta(hours=1)
     # 60 distinct videos, one recent comment each → videos.list (50-id cap)
     # must split into two requests.
     server.comment_pages = [
