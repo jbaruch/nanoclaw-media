@@ -11,7 +11,7 @@ Process steps in order. Do not skip ahead.
 
 Call the `mcp__nanoclaw__audible_backup` MCP tool with `dryRun: true`.
 
-Parse the response. If `new_books` is 0 or `books` array is empty, report "No new Audible purchases" and stop.
+Parse the response. If `new_books` is 0 or `books` array is empty, stop here. For a scheduled or wrapper invocation (weekly cadence, entertainment-sync): finish silently — no message. For a direct user invocation: report "No new Audible purchases".
 
 If the tool errors (auth failure, Docker issue), report the error and stop.
 
@@ -27,13 +27,13 @@ Proceed immediately to Step 3.
 
 ## Step 3 — Append to CSV
 
-For each book with `status: "ok"`, pipe the full backup response JSON to the CSV append script:
+Pipe the full backup response JSON to the CSV append script:
 
 ```bash
 echo '<JSON>' | python3 /home/node/.claude/skills/tessl__audible-backup/scripts/csv-append.py
 ```
 
-The script deduplicates by ASIN. Outputs JSON summary with `appended` count.
+The script decides which books are eligible to append — the contract lives in its top-of-file docstring. Outputs a JSON summary: `appended`, `skipped_existing`, `skipped_failed`, `csv_total`, `books`.
 
 Proceed immediately to Step 4.
 
@@ -53,7 +53,7 @@ N new books added to library (total: M).
 Durations in the message are HH:MM — drop the seconds from the tool's
 HH:MM:SS `duration` value.
 
-If nothing new → silence (for scheduled runs). If user-initiated → "No new purchases."
+The no-new-books case never reaches this step — Step 1 already stopped (silently for scheduled runs, with "No new Audible purchases" for user-initiated ones).
 
 Finish here — the skill is complete.
 
