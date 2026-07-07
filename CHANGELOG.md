@@ -2,6 +2,8 @@
 
 All notable changes to this tile are documented here.
 
+## 0.1.13 — 2026-07-07
+
 ### Fixed — audible-backup: scheduled no-op runs are silent (#26)
 
 Step 1 told the agent to report "No new Audible purchases" and stop, while Step 4 said scheduled runs should be silent on no new books — Step 1 fired first, so every quiet week produced a noisy message that contradicted entertainment-sync's silent-success contract. The scheduled-vs-user-initiated split now lives at Step 1 (silent for scheduled/wrapper runs, reported for direct invocations) and Step 4 defers to it.
