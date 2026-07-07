@@ -11,7 +11,9 @@ payload (duplicate ASINs appearing twice in a single `books` array
 collapse to one row). On a brand-new or empty target CSV, the CSV
 header row is written before data so the next run's `csv.DictReader`
 can parse it correctly.
-Outputs JSON summary to stdout.
+Outputs a JSON summary to stdout: {appended, skipped_existing,
+skipped_failed, csv_total, books} — all fields present on every run,
+including no-op runs with zero eligible books.
 
 Concurrency: read-existing → check-new → append is wrapped in an advisory
 exclusive file lock (fcntl.flock) so two simultaneous runs can't both see the
@@ -267,19 +269,11 @@ def main():
     data = json.load(sys.stdin)
 
     books, failed = partition_by_status(data.get("books", []))
-    if not books:
-        print(
-            json.dumps(
-                {
-                    "appended": 0,
-                    "skipped_existing": 0,
-                    "skipped_failed": len(failed),
-                    "books": [],
-                }
-            )
-        )
-        return
 
+    # No early return for an empty eligible list: the locked path handles
+    # it without touching the CSV (no header, no rows, no file creation)
+    # and still yields the existing count, so `csv_total` is present in
+    # the no-op case too and the output contract stays uniform.
     appended, existing_count, skipped = append_books_locked(CSV_PATH, books)
 
     print(

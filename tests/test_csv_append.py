@@ -48,6 +48,7 @@ def test_empty_books_returns_zero_appended(csv_append, monkeypatch, capsys):
         "appended": 0,
         "skipped_existing": 0,
         "skipped_failed": 0,
+        "csv_total": 0,
         "books": [],
     }
     # No CSV created for an empty batch.
@@ -279,6 +280,7 @@ def test_all_failed_downloads_touch_nothing(csv_append, monkeypatch, capsys):
         "appended": 0,
         "skipped_existing": 0,
         "skipped_failed": 2,
+        "csv_total": 0,
         "books": [],
     }
     assert not csv_path.exists()
