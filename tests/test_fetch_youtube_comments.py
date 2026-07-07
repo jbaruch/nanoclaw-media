@@ -10,9 +10,10 @@ Locks down the native YouTube Data API v3 fetch contract (nanoclaw-admin#339):
   - pagination follows nextPageToken
 
 The script reads YOUTUBE_API_BASE from the env, so a local fixture
-server stands in for googleapis.com. Window timestamps are computed
-relative to now (recent = now-1h, old = now-8d) so the 7-day filter is
-exercised deterministically without freezing the clock.
+server stands in for googleapis.com. The script's clock is frozen at
+FROZEN_NOW via its `_utcnow` seam, and window fixtures are fixed
+offsets from it (recent = FROZEN_NOW-1h, old = FROZEN_NOW-8d), so the
+7-day filter is exercised with no dependence on the real wall clock.
 """
 
 import importlib.util
@@ -31,6 +32,10 @@ SCRIPT_PATH = REPO_ROOT / "skills/youtube-comment-check/scripts/fetch-youtube-co
 
 CHANNEL = "UCZ8-VX2SiAIBE7guw7NG-Sg"
 
+# Fixed reference "now" — a past date, never the real clock
+# (coding-policy testing-standards: control the clock).
+FROZEN_NOW = datetime(2026, 6, 15, 12, 0, 0, tzinfo=timezone.utc)
+
 
 def _load():
     spec = importlib.util.spec_from_file_location("fetch_youtube_comments_under_test", SCRIPT_PATH)
@@ -38,6 +43,13 @@ def _load():
         raise ImportError("cannot load module spec")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
+    return module
+
+
+def _load_frozen(monkeypatch):
+    """Load the script with its clock frozen at FROZEN_NOW."""
+    module = _load()
+    monkeypatch.setattr(module, "_utcnow", lambda: FROZEN_NOW)
     return module
 
 
@@ -132,10 +144,9 @@ def _run(module, capsys):
     return rc, out
 
 
-def test_groups_recent_comments_by_video_and_filters_old(server, capsys):
-    now = datetime.now(timezone.utc)
-    recent = now - timedelta(hours=1)
-    old = now - timedelta(days=8)
+def test_groups_recent_comments_by_video_and_filters_old(server, capsys, monkeypatch):
+    recent = FROZEN_NOW - timedelta(hours=1)
+    old = FROZEN_NOW - timedelta(days=8)
     server.comment_pages = [
         {
             "items": [
@@ -152,7 +163,7 @@ def test_groups_recent_comments_by_video_and_filters_old(server, capsys):
             {"id": "vid2", "snippet": {"title": "Gradle Tips"}},
         ]
     }
-    module = _load()
+    module = _load_frozen(monkeypatch)
     rc, out = _run(module, capsys)
 
     assert rc == 0, out.err
@@ -180,15 +191,14 @@ def test_quiet_week_is_success_with_zero_count(server, capsys):
     assert payload["videos"] == []
 
 
-def test_pagination_follows_next_page_token(server, capsys):
-    now = datetime.now(timezone.utc)
-    recent = now - timedelta(hours=2)
+def test_pagination_follows_next_page_token(server, capsys, monkeypatch):
+    recent = FROZEN_NOW - timedelta(hours=2)
     server.comment_pages = [
         {"items": [_thread("vid1", "A", "one", recent)], "nextPageToken": "PAGE2"},
         {"items": [_thread("vid1", "B", "two", recent)]},
     ]
     server.videos_response = {"items": [{"id": "vid1", "snippet": {"title": "T"}}]}
-    module = _load()
+    module = _load_frozen(monkeypatch)
     rc, out = _run(module, capsys)
     assert rc == 0
     payload = json.loads(out.out.strip())
@@ -196,13 +206,12 @@ def test_pagination_follows_next_page_token(server, capsys):
     assert [e for e, _ in server.requests_seen].count("commentThreads") == 2
 
 
-def test_page_cap_truncation_fails_without_advancing(server, capsys):
-    now = datetime.now(timezone.utc)
-    recent = now - timedelta(hours=1)
+def test_page_cap_truncation_fails_without_advancing(server, capsys, monkeypatch):
+    recent = FROZEN_NOW - timedelta(hours=1)
     # Every page returns a nextPageToken → the loop exhausts the cap with a
     # token still pending. A partial fetch must fail (exit 1, no stdout) so
     # the skill does NOT stamp its success cursor and retries.
-    module = _load()
+    module = _load_frozen(monkeypatch)
     server.comment_pages = [
         {"items": [_thread(f"vid{i}", f"U{i}", "x", recent)], "nextPageToken": "MORE"}
         for i in range(module.MAX_THREAD_PAGES)
@@ -232,9 +241,8 @@ def test_api_error_envelope_exits_1(server, capsys):
     assert out.out.strip() == ""
 
 
-def test_videos_list_chunks_over_50_ids(server, capsys):
-    now = datetime.now(timezone.utc)
-    recent = now - timedelta(hours=1)
+def test_videos_list_chunks_over_50_ids(server, capsys, monkeypatch):
+    recent = FROZEN_NOW - timedelta(hours=1)
     # 60 distinct videos, one recent comment each → videos.list (50-id cap)
     # must split into two requests.
     server.comment_pages = [
@@ -243,7 +251,7 @@ def test_videos_list_chunks_over_50_ids(server, capsys):
     server.videos_response = {
         "items": [{"id": f"vid{i}", "snippet": {"title": f"Title {i}"}} for i in range(60)]
     }
-    module = _load()
+    module = _load_frozen(monkeypatch)
     rc, out = _run(module, capsys)
     assert rc == 0, out.err
     payload = json.loads(out.out.strip())
