@@ -2,6 +2,10 @@
 
 All notable changes to this tile are documented here.
 
+### Fixed — .env.example documents the runtime Trakt and YouTube variables (#28)
+
+`.env.example` listed only the CI reviewer/publish secrets; the five runtime variables the README requires (`TRAKT_CLIENT_ID`, `TRAKT_ACCESS_TOKEN`, `TRAKT_REFRESH_TOKEN`, `TRAKT_CLIENT_SECRET`, `YOUTUBE_API_KEY`) were absent, so a maintainer could satisfy CI while missing every secret the media skills need at runtime. Runtime container variables now lead the file with acquisition pointers, separated from the GitHub Actions secrets block.
+
 ## 0.1.14 — 2026-07-07
 
 ### Fixed — recommend-shows: document the current trakt-history.json schema (#24)
