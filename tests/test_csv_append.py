@@ -3,11 +3,14 @@
 Locks down the documented contract per `coding-policy: testing-standards`:
 
   - Reads JSON `{books: [...]}` from stdin
+  - Appends only books whose `status` is "ok" or absent; failed entries
+    are excluded and counted in `skipped_failed` (issue #23)
   - Dedups by ASIN against existing CSV rows AND within the input batch
   - On a brand-new or empty CSV, writes the header row before data
   - Holds `flock(LOCK_EX)` on a sibling lock file across the
     read-check-write cycle
-  - Outputs JSON `{appended, skipped_existing, csv_total, books}`
+  - Outputs JSON `{appended, skipped_existing, skipped_failed,
+    csv_total, books}` — all fields present on every run, no-ops included
 """
 
 import csv
@@ -280,6 +283,22 @@ def test_all_failed_downloads_touch_nothing(csv_append, monkeypatch, capsys):
         "appended": 0,
         "skipped_existing": 0,
         "skipped_failed": 2,
+        "csv_total": 0,
+        "books": [],
+    }
+    assert not csv_path.exists()
+
+
+def test_null_books_treated_as_empty(csv_append, monkeypatch, capsys):
+    """A literal `"books": null` payload is a no-op, not a TypeError."""
+    module, csv_path = csv_append
+    code, out, _ = _run(module, monkeypatch, capsys, {"books": None})
+    assert code == 0
+    payload = json.loads(out)
+    assert payload == {
+        "appended": 0,
+        "skipped_existing": 0,
+        "skipped_failed": 0,
         "csv_total": 0,
         "books": [],
     }

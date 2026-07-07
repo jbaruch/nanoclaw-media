@@ -268,7 +268,10 @@ def append_books_locked(csv_path, books):
 def main():
     data = json.load(sys.stdin)
 
-    books, failed = partition_by_status(data.get("books", []))
+    # `or []` guards a literal `"books": null` in the payload, which
+    # data.get() would pass through and partition_by_status() would
+    # then try to iterate.
+    books, failed = partition_by_status(data.get("books") or [])
 
     # No early return for an empty eligible list: the locked path handles
     # it without touching the CSV (no header, no rows, no file creation)
