@@ -5,7 +5,9 @@ description: Analyzes Baruch's viewing history and explicit ratings across netfl
 
 # TV Show Recommendation Skill
 
-## Step 0: Refresh Trakt history (MANDATORY — do not skip)
+Process steps in order. Do not skip ahead.
+
+## Step 1 — Refresh Trakt History (MANDATORY)
 
 Before reading `trakt-history.json`, refresh it:
 
@@ -13,18 +15,22 @@ Before reading `trakt-history.json`, refresh it:
 mcp__nanoclaw__fetch_trakt_history()
 ```
 
-Writes fresh `/workspace/group/trakt-history.json`. Skipping recommends already-watched shows. On MCP failure, proceed with the existing file but add this staleness note as the FIRST line of Step 5's output (before pitches): `<i>⚠️ Trakt refresh failed — using cached history as of {mtime, ISO date}. Recommendations may include already-watched titles.</i>`. Do NOT fabricate freshness; do NOT bury the note.
+Writes fresh `/workspace/group/trakt-history.json`. Skipping recommends already-watched shows. On MCP failure, proceed with the existing file but add this staleness note as the FIRST line of Step 8's output (before pitches): `<i>⚠️ Trakt refresh failed — using cached history as of {mtime, ISO date}. Recommendations may include already-watched titles.</i>`. Do NOT fabricate freshness; do NOT bury the note.
 
-## Data Sources
+Proceed immediately to Step 2.
+
+## Step 2 — Load Data Sources
 
 - `/workspace/group/netflix-history.csv` — Netflix history. Format: `"Show Name: Season X: Episode Name", "date"` — split on `: `. Single-part titles are movies (skip). Group by show name.
 - `/workspace/group/imdb-ratings.csv` — Explicit ratings (Const, Your Rating 1–10, Title, Title Type, Year, Genres). ~160 entries.
-- `/workspace/group/trakt-history.json` — Trakt watch history. Format: object `{"shows": [...], "movies": [...], "stats": {...}, "fetched_at": "ISO timestamp"}`. Each show: `{"title", "year", "trakt_id", "slug", "episodes_watched", "last_watched", "rating"}` — `episodes_watched` is an aggregate count, `last_watched` an ISO timestamp, `rating` Baruch's own 1–10 rating or null. Movies carry the same fields minus `episodes_watched`. **Refreshed in Step 0 — trust Trakt over CSVs for recency.** On Step 0 failure, Step 1a still applies and Step 5's staleness preamble discloses the age.
-- `/workspace/group/watchlist.json` — Upcoming tracked shows. Check before web research (Step 4a).
+- `/workspace/group/trakt-history.json` — Trakt watch history. Format: object `{"shows": [...], "movies": [...], "stats": {...}, "fetched_at": "ISO timestamp"}`. Each show: `{"title", "year", "trakt_id", "slug", "episodes_watched", "last_watched", "rating"}` — `episodes_watched` is an aggregate count, `last_watched` an ISO timestamp, `rating` Baruch's own 1–10 rating or null. Movies carry the same fields minus `episodes_watched`. **Refreshed in Step 1 — trust Trakt over CSVs for recency.** On Step 1 failure, Step 3 still applies and Step 8's staleness preamble discloses the age.
+- `/workspace/group/watchlist.json` — Upcoming tracked shows. Check before web research (Step 6).
 
 Filter out kids' content: animated children's shows, preschool series, toy-brand cartoons.
 
-### Step 1a: Source priority
+Proceed immediately to Step 3.
+
+## Step 3 — Apply Source Priority
 
 **Trakt is the primary source** — live and synced across all platforms. The CSVs are static exports that go stale.
 
@@ -36,7 +42,9 @@ Filter out kids' content: animated children's shows, preschool series, toy-brand
 
 If Baruch reports "уже видел" for a recommendation, Trakt sync hadn't finished — note and pivot.
 
-## Step 2: Classify shows
+Proceed immediately to Step 4.
+
+## Step 4 — Classify Shows
 
 For each show, compute `episodes_watched / total_episodes` — `episodes_watched` comes from the Trakt show entry (fall back to counting grouped Netflix CSV rows for shows absent from Trakt); search for the show's total if needed. Derive thresholds from actual data distribution before applying these defaults:
 
@@ -46,16 +54,18 @@ For each show, compute `episodes_watched / total_episodes` — `episodes_watched
 
 Shows with `episodes_watched` ≤ 3 and an old `last_watched` are strong abandonment signals. **Explicit ratings**: Trakt per-item `rating` (shows and movies) plus IMDB ratings (imdb-ratings.csv) — high-rated genres = confirmed loves; low-rated = genres that don't click.
 
-## Step 3: Taste profile
+Proceed immediately to Step 5.
 
-Derive from data files using Step 2 classifications and explicit ratings (Trakt `rating` + IMDB):
+## Step 5 — Build the Taste Profile
+
+Derive from data files using Step 4 classifications and explicit ratings (Trakt `rating` + IMDB):
 
 - **Top genres** — most frequent in high-rated, high-completion shows
 - **Avoided genres** — frequent in abandoned or low-rated shows
 - **Style signals** — patterns from comparing completed vs abandoned (language, episode structure, tone)
 - **Quality calibration** — use median and percentiles of Baruch's own explicit ratings (Trakt `rating` + IMDB) as the floor
 
-**Intermediate output format** (emit before Step 4 to anchor recommendations):
+**Intermediate output format** (emit before Step 7 to anchor recommendations):
 ```
 ## Taste Profile (derived from data)
 
@@ -68,30 +78,36 @@ Derive from data files using Step 2 classifications and explicit ratings (Trakt 
 **Abandoned shows:** [Show X, Show Y]
 ```
 
-## Step 4a: Check watchlist for tracked shows
+Proceed immediately to Step 6.
+
+## Step 6 — Check the Watchlist for Tracked Shows
 
 Before web research, read `/workspace/group/watchlist.json`. For `notified: false` entries, search for release status:
 - Released → include as top recommendation, note watchlist origin
 - Not yet → mention briefly as "coming soon" at end
 
-## Step 4: Check new releases (web search required)
+Proceed immediately to Step 7.
 
-Training cutoff is stale; always search. Derive queries from Step 3's taste profile — top genres and themes from completed/high-rated shows. Do NOT hardcode genre names.
+## Step 7 — Check New Releases (web search required)
+
+Training cutoff is stale; always search. Derive queries from Step 5's taste profile — top genres and themes from completed/high-rated shows. Do NOT hardcode genre names.
 
 Cross-reference against all three data files; if present in any, he's seen it. Flag started-but-not-in-history shows as "new to you."
 
 ### Quality filter (mandatory)
 
-Use thresholds from Step 3. If sparse, fall back to IMDB ≥ 7.5 / RT ≥ 75%. Search for ratings before recommending if unavailable. Always include ratings.
+Use thresholds from Step 5. If sparse, fall back to IMDB ≥ 7.5 / RT ≥ 75%. Search for ratings before recommending if unavailable. Always include ratings.
 
-## Step 5: Generate recommendations
+Proceed immediately to Step 8.
+
+## Step 8 — Generate Recommendations
 
 **Prioritize:**
 1. New seasons of completed shows (not yet in history)
-2. Shows similar to his top-completed (genre/vibe/style from Step 3)
+2. Shows similar to his top-completed (genre/vibe/style from Step 5)
 3. Patterns from data (e.g., non-English content rates high → lean in)
 
-**Avoid:** Step 3 abandoned/low-rated genres, previously abandoned shows, shows below quality threshold.
+**Avoid:** Step 5 abandoned/low-rated genres, previously abandoned shows, shows below quality threshold.
 
 **Targeted pitch format** (Telegram HTML, no Markdown):
 ```
@@ -102,7 +118,9 @@ Use thresholds from Step 3. If sparse, fall back to IMDB ≥ 7.5 / RT ≥ 75%. S
 
 Max 3–5 recommendations.
 
-## Step 6: Save announced/upcoming shows to watchlist
+Proceed immediately to Step 9.
+
+## Step 9 — Save Announced Shows to the Watchlist
 
 For announced-but-not-released shows (or just-announced new seasons) matching taste, add to `/workspace/group/watchlist.json` under `tracking` if not present:
 
@@ -118,3 +136,5 @@ For announced-but-not-released shows (or just-announced new seasons) matching ta
 ```
 
 Read existing watchlist.json first, merge, write back. No duplicates.
+
+Finish here — the skill is complete.

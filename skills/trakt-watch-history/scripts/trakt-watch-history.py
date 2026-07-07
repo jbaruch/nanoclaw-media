@@ -31,7 +31,7 @@ need a slug -> rating lookup should build one from the items.
 
 On API/network/credentials failure, emits {"error": "..."} to stdout
 and exits 1 so the caller (fetch_trakt_history MCP, recommend-shows
-Step 0) gets structured output instead of a stack trace.
+Step 1) gets structured output instead of a stack trace.
 """
 
 import json
