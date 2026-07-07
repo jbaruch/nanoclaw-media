@@ -41,14 +41,14 @@ If Baruch reports "уже видел" for a recommendation, Trakt sync hadn't fi
 For each show, compute `episodes_watched / total_episodes` — `episodes_watched` comes from the Trakt show entry (fall back to counting grouped Netflix CSV rows for shows absent from Trakt); search for the show's total if needed. Derive thresholds from actual data distribution before applying these defaults:
 
 - **Completed**: ratio > 0.8. Ongoing "caught up" = ratio near 1.0 for aired episodes AND `last_watched` recent relative to the airing schedule.
-- **Abandoned**: ratio < 0.15 AND episodes_watched ≤ 3 AND `last_watched` months in the past.
+- **Abandoned**: ratio < 0.15 AND `episodes_watched` ≤ 3 AND `last_watched` months in the past.
 - **In progress**: Everything else — do not re-recommend unless a new season exists.
 
 Shows with `episodes_watched` ≤ 3 and an old `last_watched` are strong abandonment signals. **Explicit ratings**: Trakt per-item `rating` (shows and movies) plus IMDB ratings (imdb-ratings.csv) — high-rated genres = confirmed loves; low-rated = genres that don't click.
 
 ## Step 3: Taste profile
 
-Derive from data files using Step 2 classifications and IMDB ratings:
+Derive from data files using Step 2 classifications and explicit ratings (Trakt `rating` + IMDB):
 
 - **Top genres** — most frequent in high-rated, high-completion shows
 - **Avoided genres** — frequent in abandoned or low-rated shows
@@ -63,7 +63,7 @@ Derive from data files using Step 2 classifications and IMDB ratings:
 **Avoided genres:** Reality TV, Procedural, Romantic Comedy
 **Language signal:** Non-English shows rate 0.4 pts higher on average (lean into it)
 **Episode structure:** Prefers serialized > episodic (completion rate 78% vs 41%)
-**Quality floor:** Baruch's median IMDB rating = 7.8 → use 7.5 as recommendation floor
+**Quality floor:** Baruch's median explicit rating (Trakt + IMDB) = 7.8 → use 7.5 as recommendation floor
 **Completed shows (top):** [Show A, Show B, Show C]
 **Abandoned shows:** [Show X, Show Y]
 ```
