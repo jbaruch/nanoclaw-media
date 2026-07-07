@@ -43,13 +43,11 @@ def _load():
         raise ImportError("cannot load module spec")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    return module
-
-
-def _load_frozen(monkeypatch):
-    """Load the script with its clock frozen at FROZEN_NOW."""
-    module = _load()
-    monkeypatch.setattr(module, "_utcnow", lambda: FROZEN_NOW)
+    # Freeze the script's clock for every test; the module object is a
+    # per-test throwaway, so the assignment needs no teardown. setattr
+    # (not plain assignment, hence the B010 suppression) is what lets
+    # pyright accept the dynamically-loaded module's unknown attribute.
+    setattr(module, "_utcnow", lambda: FROZEN_NOW)  # noqa: B010
     return module
 
 
@@ -144,7 +142,7 @@ def _run(module, capsys):
     return rc, out
 
 
-def test_groups_recent_comments_by_video_and_filters_old(server, capsys, monkeypatch):
+def test_groups_recent_comments_by_video_and_filters_old(server, capsys):
     recent = FROZEN_NOW - timedelta(hours=1)
     old = FROZEN_NOW - timedelta(days=8)
     server.comment_pages = [
@@ -163,7 +161,7 @@ def test_groups_recent_comments_by_video_and_filters_old(server, capsys, monkeyp
             {"id": "vid2", "snippet": {"title": "Gradle Tips"}},
         ]
     }
-    module = _load_frozen(monkeypatch)
+    module = _load()
     rc, out = _run(module, capsys)
 
     assert rc == 0, out.err
@@ -191,14 +189,14 @@ def test_quiet_week_is_success_with_zero_count(server, capsys):
     assert payload["videos"] == []
 
 
-def test_pagination_follows_next_page_token(server, capsys, monkeypatch):
+def test_pagination_follows_next_page_token(server, capsys):
     recent = FROZEN_NOW - timedelta(hours=2)
     server.comment_pages = [
         {"items": [_thread("vid1", "A", "one", recent)], "nextPageToken": "PAGE2"},
         {"items": [_thread("vid1", "B", "two", recent)]},
     ]
     server.videos_response = {"items": [{"id": "vid1", "snippet": {"title": "T"}}]}
-    module = _load_frozen(monkeypatch)
+    module = _load()
     rc, out = _run(module, capsys)
     assert rc == 0
     payload = json.loads(out.out.strip())
@@ -206,12 +204,12 @@ def test_pagination_follows_next_page_token(server, capsys, monkeypatch):
     assert [e for e, _ in server.requests_seen].count("commentThreads") == 2
 
 
-def test_page_cap_truncation_fails_without_advancing(server, capsys, monkeypatch):
+def test_page_cap_truncation_fails_without_advancing(server, capsys):
     recent = FROZEN_NOW - timedelta(hours=1)
     # Every page returns a nextPageToken → the loop exhausts the cap with a
     # token still pending. A partial fetch must fail (exit 1, no stdout) so
     # the skill does NOT stamp its success cursor and retries.
-    module = _load_frozen(monkeypatch)
+    module = _load()
     server.comment_pages = [
         {"items": [_thread(f"vid{i}", f"U{i}", "x", recent)], "nextPageToken": "MORE"}
         for i in range(module.MAX_THREAD_PAGES)
@@ -241,7 +239,7 @@ def test_api_error_envelope_exits_1(server, capsys):
     assert out.out.strip() == ""
 
 
-def test_videos_list_chunks_over_50_ids(server, capsys, monkeypatch):
+def test_videos_list_chunks_over_50_ids(server, capsys):
     recent = FROZEN_NOW - timedelta(hours=1)
     # 60 distinct videos, one recent comment each → videos.list (50-id cap)
     # must split into two requests.
@@ -251,7 +249,7 @@ def test_videos_list_chunks_over_50_ids(server, capsys, monkeypatch):
     server.videos_response = {
         "items": [{"id": f"vid{i}", "snippet": {"title": f"Title {i}"}} for i in range(60)]
     }
-    module = _load_frozen(monkeypatch)
+    module = _load()
     rc, out = _run(module, capsys)
     assert rc == 0, out.err
     payload = json.loads(out.out.strip())
