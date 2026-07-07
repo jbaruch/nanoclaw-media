@@ -15,7 +15,7 @@ Before reading `trakt-history.json`, refresh it:
 mcp__nanoclaw__fetch_trakt_history()
 ```
 
-Writes fresh `/workspace/group/trakt-history.json`. Skipping recommends already-watched shows. On MCP failure, proceed with the existing file but add this staleness note as the FIRST line of Step 8's output (before pitches): `<i>⚠️ Trakt refresh failed — using cached history as of {mtime, ISO date}. Recommendations may include already-watched titles.</i>`. Do NOT fabricate freshness; do NOT bury the note.
+Writes fresh `/workspace/group/trakt-history.json`. Skipping the refresh risks recommending already-watched shows. On MCP failure, proceed with the existing file but add this staleness note as the FIRST line of Step 8's output (before pitches): `<i>⚠️ Trakt refresh failed — using cached history as of {mtime, ISO date}. Recommendations may include already-watched titles.</i>`. Do NOT fabricate freshness; do NOT bury the note.
 
 Proceed immediately to Step 2.
 
@@ -94,9 +94,7 @@ Training cutoff is stale; always search. Derive queries from Step 5's taste prof
 
 Cross-reference against all three data files; if present in any, he's seen it. Flag started-but-not-in-history shows as "new to you."
 
-### Quality filter (mandatory)
-
-Use thresholds from Step 5. If sparse, fall back to IMDB ≥ 7.5 / RT ≥ 75%. Search for ratings before recommending if unavailable. Always include ratings.
+**Quality filter (mandatory):** use thresholds from Step 5. If sparse, fall back to IMDB ≥ 7.5 / RT ≥ 75%. Search for ratings before recommending if unavailable. Always include ratings.
 
 Proceed immediately to Step 8.
 
