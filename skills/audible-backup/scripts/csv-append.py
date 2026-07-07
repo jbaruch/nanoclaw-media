@@ -274,9 +274,10 @@ def main():
     books, failed = partition_by_status(data.get("books") or [])
 
     # No early return for an empty eligible list: the locked path handles
-    # it without touching the CSV (no header, no rows, no file creation)
-    # and still yields the existing count, so `csv_total` is present in
-    # the no-op case too and the output contract stays uniform.
+    # it without touching the CSV (no header, no rows, no CSV creation —
+    # only the sibling lock file is opened) and still yields the existing
+    # count, so `csv_total` is present in the no-op case too and the
+    # output contract stays uniform.
     appended, existing_count, skipped = append_books_locked(CSV_PATH, books)
 
     print(
