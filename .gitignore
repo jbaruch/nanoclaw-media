@@ -45,4 +45,5 @@ tessl.json
 AGENTS.md
 CLAUDE.md
 .github/skills/
+.github/mcp.json
 .venv/
