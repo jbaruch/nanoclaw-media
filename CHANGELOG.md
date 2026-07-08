@@ -2,6 +2,58 @@
 
 All notable changes to this plugin are documented here.
 
+### Changed — backfill headings for the 0.1.20–0.1.27 dependency releases; exclude renovate.json from the published plugin
+
+Versions 0.1.20 through 0.1.27 (Dependabot/Renovate merges) published without CHANGELOG entries — the stamp step only writes a heading above un-headed entry blocks, and bot PRs carry none. Entries reconstructed from the merge commits. `renovate.json` joins `.tesslignore` — it is repo automation config, not plugin content, and shipped in the 0.1.27 artifact by omission.
+
+## 0.1.27 — 2026-07-08
+
+### Added — Renovate onboarding config
+
+Merge the Renovate onboarding PR (`renovate.json`, `config:recommended`). Renovate runs alongside the existing weekly Dependabot config; both cover github-actions and pip.
+
+## 0.1.26 — 2026-07-08
+
+### Changed — bump actions/cache/save from 5.0.5 to 6.1.0
+
+Applied directly in the gh-aw compiled `review-*.lock.yml` files; the next reviewer-template refresh regenerates them and may supersede this pin.
+
+## 0.1.25 — 2026-07-08
+
+### Changed — bump actions/cache/restore from 5.0.5 to 6.1.0
+
+Applied directly in the gh-aw compiled `review-*.lock.yml` files, same caveat as 0.1.26.
+
+## 0.1.24 — 2026-07-08
+
+### Changed — bump github/gh-aw-actions/setup from 0.81.6 to 0.82.2
+
+Applied directly in the gh-aw compiled `review-*.lock.yml` files, same caveat as 0.1.26. Reviewer workflows verified green on subsequent PRs.
+
+## 0.1.23 — 2026-07-08
+
+### Changed — bump actions/checkout from 4 to 7
+
+`test.yml` and `publish-plugin.yml`; retires the Node 20 deprecation warning on every run.
+
+## 0.1.22 — 2026-07-08
+
+### Changed — bump pytest from 8.3.4 to 9.1.1
+
+Full suite passes unchanged on the new major.
+
+## 0.1.21 — 2026-07-08
+
+### Changed — bump pyright from 1.1.408 to 1.1.411
+
+Zero findings before and after.
+
+## 0.1.20 — 2026-07-08
+
+### Changed — bump ruff from 0.7.4 to 0.15.20 with its UP041/format fixes
+
+ruff 0.15 enforces UP041 (`socket.timeout` is an alias of the `TimeoutError` builtin since Python 3.10) and collapses an implicit string concatenation. The rename is applied end-to-end in trakt-watch-history and its tests — except clauses, the `isinstance` reason check, docstrings, the test name, and the emitted diagnostic marker `(bare socket.timeout)` → `(bare TimeoutError)` with its assertion. Runtime semantics unchanged; this closes the loop on the issue #25 non-repro (the failing reformat only existed on unpinned newer ruff, and landed here with the bump).
+
 ## 0.1.19 — 2026-07-08
 
 ### Added — trakt-history.json is a versioned stateful artifact (#33)
