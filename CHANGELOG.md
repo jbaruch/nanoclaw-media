@@ -2,6 +2,8 @@
 
 All notable changes to this plugin are documented here.
 
+## 0.1.33 — 2026-07-08
+
 ### Changed — backfill headings for the 0.1.30–0.1.32 Renovate releases
 
 Three routine Renovate bumps published without CHANGELOG entries (bot PRs carry none; the stamp step only heads existing blocks). Reconstructed from the merge commits. This is the recurring bot-bump gap the 0.1.20–0.1.27 and this backfill both close after the fact.
