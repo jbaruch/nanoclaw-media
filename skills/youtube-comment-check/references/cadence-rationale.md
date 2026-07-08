@@ -8,7 +8,7 @@ Have the precheck call YouTube (via Composio's REST surface) and count comments 
 
 Why rejected (same reasoning slice 1's `nightly-undated-task-sweep` applied to a Tasks-API gate):
 
-- **No precedent in this tile.** Every existing precheck in `nanoclaw-admin` (`heartbeat-precheck.py`, `morning-brief-precheck.py`, `precheck-undated-task-sweep.py`, `precheck-state-purge.py`) reads from SQLite or the local filesystem only. None of them shells out to a network API.
+- **No precedent in this plugin.** Every existing precheck in `nanoclaw-admin` (`heartbeat-precheck.py`, `morning-brief-precheck.py`, `precheck-undated-task-sweep.py`, `precheck-state-purge.py`) reads from SQLite or the local filesystem only. None of them shells out to a network API.
 - **OAuth refresh inside the precheck container.** The OneCLI vault mediates token refresh for agent containers. The precheck process is a short-lived subprocess spawned by the task-scheduler with a different env profile; wiring vault access into it doubles the surface where a token rotation can fail silently.
 - **Failure modes leak into wake decisions.** A 500 from YouTube would force a fail-open ("wake to be safe") on every cycle the API is unhealthy, defeating the gate's purpose during the exact incidents the gate is supposed to insulate from.
 
@@ -24,4 +24,4 @@ Why this works:
 
 ## When to revisit
 
-If `task_run_logs` shows the gating savings are insufficient (e.g. the check wakes every cycle because the cursor write keeps failing, or 7d is too tight for the actual rate of new comments), revisit the option matrix. A count-based gate via the YouTube API remains an option once the OAuth / failure-mode concerns above are addressed at the tile level — likely as a shared "Composio precheck client" sitting alongside `heartbeat-checks.py`, not as a per-skill ad-hoc.
+If `task_run_logs` shows the gating savings are insufficient (e.g. the check wakes every cycle because the cursor write keeps failing, or 7d is too tight for the actual rate of new comments), revisit the option matrix. A count-based gate via the YouTube API remains an option once the OAuth / failure-mode concerns above are addressed at the plugin level — likely as a shared "Composio precheck client" sitting alongside `heartbeat-checks.py`, not as a per-skill ad-hoc.
