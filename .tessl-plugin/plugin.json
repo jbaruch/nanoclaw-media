@@ -1,6 +1,6 @@
 {
   "name": "jbaruch/nanoclaw-media",
-  "version": "0.1.23",
+  "version": "0.1.24",
   "description": "Personal entertainment-media skills for NanoClaw: Trakt watch-history sync, TV-show and audiobook recommendations, watchlist release checks, YouTube channel-comment digests, and Audible backup — with a weekly cadence companion. NanoClaw per-chat overlay tile.",
   "private": false,
   "skills": [
