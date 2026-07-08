@@ -2,6 +2,28 @@
 
 All notable changes to this plugin are documented here.
 
+### Changed — backfill headings for the 0.1.30–0.1.32 Renovate releases
+
+Three routine Renovate bumps published without CHANGELOG entries (bot PRs carry none; the stamp step only heads existing blocks). Reconstructed from the merge commits. This is the recurring bot-bump gap the 0.1.20–0.1.27 and this backfill both close after the fact.
+
+## 0.1.32 — 2026-07-08
+
+### Changed — bump actions/setup-python from v5 to v6 (#44)
+
+`test.yml`; Renovate.
+
+## 0.1.31 — 2026-07-08
+
+### Changed — bump jbaruch/coding-policy digest to 759e589 (#39)
+
+Refreshes the pinned action SHA in `publish-plugin.yml`; Renovate.
+
+## 0.1.30 — 2026-07-08
+
+### Changed — bump github/gh-aw-actions/setup to v0.82.6 (#40)
+
+Applied in the gh-aw compiled `review-*.lock.yml` files; the next reviewer-template refresh regenerates them and may supersede this pin.
+
 ## 0.1.29 — 2026-07-08
 
 ### Changed — consolidate dependency automation on Renovate; remove Dependabot
