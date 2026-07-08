@@ -7,8 +7,8 @@ description: Fetch Trakt.tv watch history (shows, movies, ratings) for analysis 
 
 Run via MCP: `mcp__nanoclaw__fetch_trakt_history()`
 
-The script returns JSON:
-```json
+The script returns JSON (field names shown schematically, not literal JSON):
+```text
 {
   "schema_version": 1,
   "shows": [{"title", "year", "trakt_id", "slug", "episodes_watched", "last_watched", "rating"}],

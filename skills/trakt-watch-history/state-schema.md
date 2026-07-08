@@ -22,7 +22,14 @@ Stateful artifact per `jbaruch/coding-policy: stateful-artifacts`. Owner skill: 
     }
   ],
   "movies": [
-    { "same fields as shows, minus episodes_watched": "" }
+    {
+      "title": "string",
+      "year": "int | null",
+      "trakt_id": "int | null",
+      "slug": "string | null",
+      "last_watched": "ISO 8601 timestamp | null",
+      "rating": "int 1-10 | null (Baruch's own rating)"
+    }
   ],
   "stats": { "total_shows": "int", "total_movies": "int", "rated": "int" },
   "fetched_at": "ISO 8601 timestamp (UTC)"
@@ -37,7 +44,7 @@ Field promises: `shows` and `movies` are always present (possibly empty arrays) 
 |---|---|---|
 | `trakt-watch-history` (via `fetch_trakt_history` MCP) | writer + owner | Emits every field above on every successful run, stamped with the current `schema_version` |
 | `entertainment-sync` (Step 1) | writer trigger | Invokes the same MCP fetch; never writes the file itself |
-| `recommend-shows` (Steps 1–2) | reader | Reads aggregates only; tolerates a missing file (no prior state) |
+| `recommend-shows` (Step 1 trigger, Steps 2–5 reader) | writer trigger + reader | Step 1 invokes the same MCP fetch (never writes the file itself, never migrates). Reads `shows[*].title`, `year`, `slug`, `episodes_watched`, `last_watched`, `rating` and `movies[*].title`, `year`, `rating` for classification and taste signals; tolerates a missing file (no prior state) |
 
 ## Migration Policy
 
