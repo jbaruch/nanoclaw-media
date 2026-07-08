@@ -23,7 +23,7 @@ Returns:
     "shows": [{"title", "year", "trakt_id", "slug", "episodes_watched", "last_watched", "rating"}],
     "movies": [{"title", "year", "trakt_id", "slug", "last_watched", "rating"}],
     "stats": {"total_shows", "total_movies", "rated"},
-    "fetched_at": "ISO timestamp"
+    "fetched_at": "ISO 8601 UTC timestamp"
   }
 
 The record shape is the versioned stateful-artifact contract documented
