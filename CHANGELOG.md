@@ -2,6 +2,8 @@
 
 All notable changes to this plugin are documented here.
 
+## 0.1.29 — 2026-07-08
+
 ### Changed — consolidate dependency automation on Renovate; remove Dependabot
 
 Two bots were bumping the same ecosystems (pip + github-actions) after the Renovate onboarding merged in 0.1.27, producing duplicate and racing PRs. Standardize on Renovate and delete `.github/dependabot.yml`. Renovate's `config:recommended` already covers both ecosystems Dependabot watched, adds native digest updates for the `jbaruch/coding-policy@<sha>` action pins the workflows use, and groups related bumps into single PRs — which matters under publish-on-merge, where each ungrouped bump would otherwise mint its own version. The `dependency-management` rule's renewal-mechanism requirement stays satisfied by the committed `renovate.json`.
