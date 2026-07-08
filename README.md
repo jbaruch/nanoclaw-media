@@ -48,15 +48,15 @@ The skills read and write files under the shared `/workspace/group/` mount:
 
 | File | Access | Owner |
 |------|--------|-------|
-| `trakt-history.json` | write (`entertainment-sync`/`trakt-watch-history`), read (`recommend-shows`) | this tile |
-| `watchlist.json` | write (`recommend-shows`), read (`check-watchlist`) | this tile |
-| `books-library.csv` | write (`audible-backup`), read (`recommend-books`) | this tile |
+| `trakt-history.json` | write (`entertainment-sync`/`trakt-watch-history`), read (`recommend-shows`) | this plugin |
+| `watchlist.json` | write (`recommend-shows`), read (`check-watchlist`) | this plugin |
+| `books-library.csv` | write (`audible-backup`), read (`recommend-books`) | this plugin |
 | `netflix-history.csv` | read | owner-uploaded |
 | `imdb-ratings.csv` | read | owner-uploaded |
-| `state/entertainment-sync-cursor.json` | read+write | this tile (cadence cursor) |
-| `state/youtube-comment-check-cursor.json` | read+write | this tile (cadence cursor) |
+| `state/entertainment-sync-cursor.json` | read+write | this plugin (cadence cursor) |
+| `state/youtube-comment-check-cursor.json` | read+write | this plugin (cadence cursor) |
 
-Owner-uploaded files degrade gracefully when absent (ladder-fallback). Intra-cluster reads (`recommend-shows` ← `trakt-history.json`) resolve because all producing/consuming skills ship in this tile.
+Owner-uploaded files degrade gracefully when absent (ladder-fallback). Intra-cluster reads (`recommend-shows` ← `trakt-history.json`) resolve because all producing/consuming skills ship in this plugin.
 
 ## Skills
 

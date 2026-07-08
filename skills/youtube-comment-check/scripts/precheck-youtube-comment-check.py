@@ -8,7 +8,7 @@ than CADENCE; otherwise emit `wake_agent: false` so the weekly cron fires
 for free.
 
 Comment-count-delta gating via the YouTube tool was rejected for the same
-reason slice 1 rejected a Tasks-API gate (no precedent in this tile, OAuth
+reason slice 1 rejected a Tasks-API gate (no precedent in this plugin, OAuth
 refresh fragility, fail-open leaks during 5xx incidents). See
 `references/cadence-rationale.md`.
 

@@ -1,6 +1,10 @@
 # Changelog
 
-All notable changes to this tile are documented here.
+All notable changes to this plugin are documented here.
+
+### Changed — migrate tile.json to .tessl-plugin/plugin.json (#29)
+
+`tessl plugin migrate` converts the deprecated `tile.json` manifest to `.tessl-plugin/plugin.json`, and `.tileignore` is renamed `.tesslignore`, retiring the two deprecation warnings and the future publish break Tessl announced for the legacy format. The publish workflow is renamed `publish-plugin.yml` ("Review & Publish Plugin", `tessl plugin lint`), and package-sense "tile" wording in ignore-file comments, the README data table, and the cadence-rationale references now reads "plugin". NanoClaw-domain "tile" terminology stays (`additionalTiles`, "per-chat overlay tile") — that is the host product's name for its overlay mechanism, not the Tessl package format. Historical CHANGELOG entries keep their original wording.
 
 ## 0.1.17 — 2026-07-08
 

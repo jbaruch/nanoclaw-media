@@ -8,7 +8,7 @@ Have the precheck call Trakt's API to count new history entries since `last_run`
 
 Why rejected:
 
-- **Same OAuth-leak failure mode as slice 1.** Network calls from a precheck process create the exact failure surface (token rotation, 5xx fail-open, no-precedent in this tile) that slices 1, 3, 4, 5 already documented for Composio-style gates. Two APIs doubles the surface.
+- **Same OAuth-leak failure mode as slice 1.** Network calls from a precheck process create the exact failure surface (token rotation, 5xx fail-open, no-precedent in this plugin) that slices 1, 3, 4, 5 already documented for Composio-style gates. Two APIs doubles the surface.
 - **Inner skills already gate.** `recommend-shows`, `recommend-books`, `audible-backup`, `check-watchlist` each handle the "no new data" case by staying silent. The wrapper running with no new entries on a cadence-elapsed cycle costs nothing user-visible.
 - **The wrapper IS cheap to run.** Five inner-skill invocations sequentially, most of which short-circuit when no new data exists. Running the bundle weekly regardless of the API delta is fine.
 
@@ -26,4 +26,4 @@ Why this works:
 
 ## When to revisit
 
-If `task_run_logs` shows the wrapper firing regularly with all five inner skills going silent (suggesting Trakt + Audible have nothing new), tighten cadence to biweekly. If a per-source delta gate becomes feasible at the tile level (a shared Composio-aware precheck client landing for OWASP work, etc.), it can layer on top of this cap without changing the wrapper.
+If `task_run_logs` shows the wrapper firing regularly with all five inner skills going silent (suggesting Trakt + Audible have nothing new), tighten cadence to biweekly. If a per-source delta gate becomes feasible at the plugin level (a shared Composio-aware precheck client landing for OWASP work, etc.), it can layer on top of this cap without changing the wrapper.
