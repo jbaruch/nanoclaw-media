@@ -20,9 +20,9 @@ Filter to shows where `notified: false` only.
 
 ## Step 2 — Check release status
 
-For each unnotified show, do a web search with the current and next calendar year derived from today's date (never hardcoded years), plus the entry's `expected` year when present:
+For each unnotified show, do a web search with the current and next calendar year derived from the run date in UTC (never hardcoded years), plus the entry's `expected` year when it names a different one:
 ```
-"[title]" release date [current year] [next year] streaming
+"[title]" release date [current year] [next year] [expected year, if different] streaming
 ```
 
 Determine:
