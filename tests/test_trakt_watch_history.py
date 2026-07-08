@@ -19,11 +19,11 @@ Locks down the documented contract per `coding-policy: testing-standards`:
     contract):
       * `urllib.error.HTTPError` → `Trakt API <path> returned HTTP
         <code>: <preview>` (preview bounded to `ERROR_PREVIEW_BYTES`)
-      * `urllib.error.URLError` with `socket.timeout` reason →
+      * `urllib.error.URLError` with `TimeoutError` reason →
         `timed out after <N>s`
       * `urllib.error.URLError` other → `network error: <reason>`
-      * `bare socket.timeout` (defensive fallback) → `timed out after
-        <N>s (bare socket.timeout)`
+      * bare `TimeoutError` (defensive fallback) → `timed out after
+        <N>s (bare TimeoutError)`
       * `JSONDecodeError` on a non-JSON response → preview from raw
         bytes (consistent byte-bound across paths)
 
@@ -343,17 +343,17 @@ def test_url_error_other_reason_emits_network_error(trakt_watch_history, monkeyp
     assert "network error: Name or service not known" in payload["error"]
 
 
-def test_bare_socket_timeout_defensive_fallback(trakt_watch_history, monkeypatch, capsys):
-    """Defensive `except socket.timeout` keeps a stable error message
+def test_bare_timeout_error_defensive_fallback(trakt_watch_history, monkeypatch, capsys):
+    """Defensive `except TimeoutError` keeps a stable error message
     if the stdlib ever stops wrapping in URLError. The marker `(bare
-    socket.timeout)` makes that drift immediately visible in the run
+    TimeoutError)` makes that drift immediately visible in the run
     log."""
     _patch_urlopen(monkeypatch, {"/users/me/watched/shows": TimeoutError("raw")})
 
     code, out, _ = _run(trakt_watch_history, monkeypatch, capsys)
     assert code == 1
     payload = json.loads(out)
-    assert "(bare socket.timeout)" in payload["error"]
+    assert "(bare TimeoutError)" in payload["error"]
 
 
 def test_non_json_response_emits_preview(trakt_watch_history, monkeypatch, capsys):

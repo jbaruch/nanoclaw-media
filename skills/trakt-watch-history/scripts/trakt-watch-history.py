@@ -40,7 +40,6 @@ Step 1) gets structured output instead of a stack trace.
 
 import json
 import os
-import socket
 import sys
 import urllib.error
 import urllib.request
@@ -332,20 +331,21 @@ def api_get(path: str, headers: dict, _retry: bool = True):
         fail(f"Trakt API {path} returned HTTP {e.code}: {body}")
     except urllib.error.URLError as e:
         # `urlopen(..., timeout=...)` raises URLError with `reason` set
-        # to a `socket.timeout` on timeout — NOT a bare `socket.timeout`
-        # exception. A separate `except socket.timeout` below would
+        # to a `TimeoutError` on timeout — NOT a bare `TimeoutError`
+        # exception. A separate `except TimeoutError` below would
         # therefore never fire. Check `.reason` inline so the operator
         # gets "timed out after Ns" instead of a generic "network
         # error: The read operation timed out."
-        if isinstance(e.reason, socket.timeout):
+        if isinstance(e.reason, TimeoutError):
             fail(f"Trakt API {path} timed out after {TIMEOUT_SECONDS}s")
         fail(f"Trakt API {path} network error: {e.reason}")
     except TimeoutError:
         # Defensive fallback: kept in case the stdlib ever reverts to
-        # raising bare `socket.timeout`. If this branch ever fires on
-        # current Python, the wrapping-in-URLError invariant has
-        # changed — the message makes it visible so we notice.
-        fail(f"Trakt API {path} timed out after {TIMEOUT_SECONDS}s (bare socket.timeout)")
+        # raising a bare `TimeoutError` (formerly the `socket.timeout`
+        # alias). If this branch ever fires on current Python, the
+        # wrapping-in-URLError invariant has changed — the message
+        # makes it visible so we notice.
+        fail(f"Trakt API {path} timed out after {TIMEOUT_SECONDS}s (bare TimeoutError)")
 
     # Parse outside the urlopen try/except so JSONDecodeError has
     # access to the raw response bytes for a preview in the fail
