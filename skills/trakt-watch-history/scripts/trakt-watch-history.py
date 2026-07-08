@@ -340,7 +340,7 @@ def api_get(path: str, headers: dict, _retry: bool = True):
         if isinstance(e.reason, socket.timeout):
             fail(f"Trakt API {path} timed out after {TIMEOUT_SECONDS}s")
         fail(f"Trakt API {path} network error: {e.reason}")
-    except socket.timeout:
+    except TimeoutError:
         # Defensive fallback: kept in case the stdlib ever reverts to
         # raising bare `socket.timeout`. If this branch ever fires on
         # current Python, the wrapping-in-URLError invariant has

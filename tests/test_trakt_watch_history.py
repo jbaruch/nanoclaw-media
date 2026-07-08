@@ -35,7 +35,6 @@ without real network I/O.
 
 import io
 import json
-import socket
 import urllib.error
 from datetime import datetime, timezone
 from email.message import Message
@@ -320,9 +319,9 @@ def test_http_error_emits_status_and_bounded_preview(trakt_watch_history, monkey
 
 
 def test_url_error_with_timeout_reason_message(trakt_watch_history, monkeypatch, capsys):
-    """`URLError(reason=socket.timeout())` → operator-friendly "timed
+    """`URLError(reason=TimeoutError())` → operator-friendly "timed
     out after Ns" message."""
-    err = urllib.error.URLError(reason=socket.timeout("read timed out"))
+    err = urllib.error.URLError(reason=TimeoutError("read timed out"))
     _patch_urlopen(monkeypatch, {"/users/me/watched/shows": err})
 
     code, out, _ = _run(trakt_watch_history, monkeypatch, capsys)
@@ -349,7 +348,7 @@ def test_bare_socket_timeout_defensive_fallback(trakt_watch_history, monkeypatch
     if the stdlib ever stops wrapping in URLError. The marker `(bare
     socket.timeout)` makes that drift immediately visible in the run
     log."""
-    _patch_urlopen(monkeypatch, {"/users/me/watched/shows": socket.timeout("raw")})
+    _patch_urlopen(monkeypatch, {"/users/me/watched/shows": TimeoutError("raw")})
 
     code, out, _ = _run(trakt_watch_history, monkeypatch, capsys)
     assert code == 1
@@ -502,7 +501,7 @@ def test_401_refresh_persists_new_tokens_to_env_in_place(
 
     inode_after = env_path.stat().st_ino
     assert inode_after == inode_before, (
-        "inode swap would break docker bind-mounts; " f"before={inode_before}, after={inode_after}"
+        f"inode swap would break docker bind-mounts; before={inode_before}, after={inode_after}"
     )
 
     new_lines = env_path.read_text().splitlines()
