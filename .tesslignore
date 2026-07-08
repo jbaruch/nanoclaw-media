@@ -52,3 +52,6 @@ Thumbs.db
 .idea/
 *.swp
 *~
+
+# Repo automation config, not plugin content
+renovate.json
