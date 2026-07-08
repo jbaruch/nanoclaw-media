@@ -56,8 +56,6 @@ Suggest titles not already in the user's history that match the patterns you act
 - If ratings are sparse, fall back to `last_watched` recency as a preference signal.
 - **Presentation:** Provide 3–5 primary recommendations and 1–2 secondary ones. For each title include its name, year, and a one-sentence reason tied to the user's viewing history (e.g., shared creator, era, or themes with a title they rated highly). If a rec rests on a genre inference, say so explicitly so the user can correct you.
 
+**Example approach:** if a user has rated five sci-fi shows 9/10 and two crime dramas 7/10, recommend sci-fi titles first (e.g., shows sharing cast, creators, or themes with their top-rated entries), then offer one or two crime dramas as an alternative. Always exclude titles already present in `shows` or `movies`.
+
 Finish here — the skill is complete.
-
-## Example Approach
-
-If a user has rated five sci-fi shows 9/10 and two crime dramas 7/10, recommend sci-fi titles first (e.g., shows sharing cast, creators, or themes with their top-rated entries), then offer one or two crime dramas as an alternative. Always exclude titles already present in `shows` or `movies`.
