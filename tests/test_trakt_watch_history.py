@@ -220,6 +220,8 @@ def test_happy_path_full_payload(trakt_watch_history, monkeypatch, capsys):
     code, out, _ = _run(trakt_watch_history, monkeypatch, capsys)
     assert code == 0
     payload = json.loads(out)
+    # Versioned stateful-artifact record (state-schema.md, issue #33).
+    assert payload["schema_version"] == trakt_watch_history.SCHEMA_VERSION
     # Sort: most recent first.
     assert [s["title"] for s in payload["shows"]] == ["Andor", "Severance"]
     severance = next(s for s in payload["shows"] if s["slug"] == "severance")

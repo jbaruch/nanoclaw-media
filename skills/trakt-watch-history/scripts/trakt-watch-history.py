@@ -19,11 +19,15 @@ operator runs the device-code flow manually via
 
 Returns:
   {
+    "schema_version": 1,
     "shows": [{"title", "year", "trakt_id", "slug", "episodes_watched", "last_watched", "rating"}],
     "movies": [{"title", "year", "trakt_id", "slug", "last_watched", "rating"}],
     "stats": {"total_shows", "total_movies", "rated"},
     "fetched_at": "ISO timestamp"
   }
+
+The record shape is the versioned stateful-artifact contract documented
+in skills/trakt-watch-history/state-schema.md (owner: this skill).
 
 Per-item `rating` is sourced from the Trakt ratings endpoints and
 attached by slug. No top-level ratings map is emitted; callers that
@@ -45,6 +49,10 @@ from typing import NoReturn
 
 TIMEOUT_SECONDS = 30
 ERROR_PREVIEW_BYTES = 200
+# Version of the emitted trakt-history.json record shape, per
+# `jbaruch/coding-policy: stateful-artifacts`. Bump on any shape change;
+# the contract lives in skills/trakt-watch-history/state-schema.md.
+SCHEMA_VERSION = 1
 
 # Browser-shaped User-Agent shared across data fetches and the
 # /oauth/token refresh-grant. See _build_headers for the Cloudflare
@@ -425,6 +433,7 @@ def main():
     movies.sort(key=lambda x: x.get("last_watched") or "", reverse=True)
 
     result = {
+        "schema_version": SCHEMA_VERSION,
         "shows": shows,
         "movies": movies,
         "stats": {

@@ -10,11 +10,18 @@ Run via MCP: `mcp__nanoclaw__fetch_trakt_history()`
 The script returns JSON:
 ```json
 {
+  "schema_version": 1,
   "shows": [{"title", "year", "trakt_id", "slug", "episodes_watched", "last_watched", "rating"}],
   "movies": [{"title", "year", "trakt_id", "slug", "last_watched", "rating"}],
   "stats": {"total_shows", "total_movies", "rated"},
   "fetched_at": "ISO timestamp"
 }
+```
+
+This skill owns the persisted `trakt-history.json` record shape. The versioned contract, field promises, and migration policy live in:
+
+```text
+skills/trakt-watch-history/state-schema.md
 ```
 
 > **Note on genre data:** The JSON schema does not include genre fields. Use general knowledge when confident (e.g., *Breaking Bad* = crime/drama) and be explicit about uncertainty for less-known titles — if a title's genre isn't clear, say so rather than guessing. No additional API call is available for genre classification.
