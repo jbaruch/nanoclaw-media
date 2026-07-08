@@ -7,9 +7,11 @@ description: Fetch Trakt.tv watch history (shows, movies, ratings) for analysis 
 
 Process steps in order. Do not skip ahead.
 
-## Output Shape
+## Step 1 — Fetch History
 
-The MCP fetch returns JSON (field names shown schematically, not literal JSON):
+Call `mcp__nanoclaw__fetch_trakt_history()` to retrieve history.
+
+The fetch returns JSON (field names shown schematically, not literal JSON):
 ```text
 {
   "schema_version": 1,
@@ -28,9 +30,7 @@ skills/trakt-watch-history/state-schema.md
 
 > **Note on genre data:** The JSON schema does not include genre fields. Use general knowledge when confident (e.g., *Breaking Bad* = crime/drama) and be explicit about uncertainty for less-known titles — if a title's genre isn't clear, say so rather than guessing. No additional API call is available for genre classification.
 
-## Step 1 — Fetch History
-
-Call `mcp__nanoclaw__fetch_trakt_history()` to retrieve history.
+Branch on the result:
 
 - If the call returns `{"error": "..."}` — a real failure (auth, network, 5xx). Report the error to the user, suggest checking the Trakt.tv connection, and stop.
 - If it succeeds but `shows` AND `movies` are both empty — this is a VALID state for a fresh Trakt account or privacy-restricted API access. Tell the user there's no recorded history yet and ask whether they expected data (so they can check their Trakt settings if needed) — don't treat silence as a failure. Finish here.
