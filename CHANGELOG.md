@@ -2,6 +2,10 @@
 
 All notable changes to this plugin are documented here.
 
+### Added — trakt-history.json is a versioned stateful artifact (#33)
+
+The cross-invocation `trakt-history.json` record now satisfies the stateful-artifacts contract: the producer stamps `schema_version` (currently 1), the schema/writer/reader contract lives in `skills/trakt-watch-history/state-schema.md` next to the owner skill, and `recommend-shows` documents its reader tolerance — records without `schema_version` are legacy pre-v1 with the same shape, records with a newer version mean no usable prior state. Additive bump: existing consumers read v1 records unchanged.
+
 ## 0.1.18 — 2026-07-08
 
 ### Changed — migrate tile.json to .tessl-plugin/plugin.json (#29)
