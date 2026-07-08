@@ -2,6 +2,8 @@
 
 All notable changes to this plugin are documented here.
 
+## 0.1.28 — 2026-07-08
+
 ### Changed — backfill headings for the 0.1.20–0.1.27 dependency releases; exclude renovate.json from the published plugin
 
 Versions 0.1.20 through 0.1.27 (Dependabot/Renovate merges) published without CHANGELOG entries — the stamp step only writes a heading above un-headed entry blocks, and bot PRs carry none. Entries reconstructed from the merge commits. `renovate.json` joins `.tesslignore` — it is repo automation config, not plugin content, and shipped in the 0.1.27 artifact by omission.
