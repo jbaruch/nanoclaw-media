@@ -54,7 +54,7 @@ Always search the web for new books from top authors before recommending.
 
 Derive top authors from the JSON (highest "Finished" count), plus any author Baruch mentions.
 
-For each, search: `"[Author name]" new book 2025 OR 2026 audiobook`
+For each, search with the current and next calendar year derived from the run date in UTC (never hardcoded years): `"[Author name]" new book [current year] OR [next year] audiobook`
 
 Cross-reference results against the library JSON by `title` and `author`. If already in library, skip. If not in library and fits taste, recommend (flag as "not yet in your library, available on Audible").
 

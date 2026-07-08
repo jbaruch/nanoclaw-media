@@ -2,6 +2,10 @@
 
 All notable changes to this tile are documented here.
 
+### Fixed — release-search prompts derive years from the run date (#27)
+
+`check-watchlist` and `recommend-books` hardcoded "2025 2026" in their web-search prompts, which rot as calendar time advances — by mid-2026 the queries already missed late-2026/2027 releases. The prompts now instruct deriving the current and next calendar year from the run date in UTC, and `check-watchlist` folds in the watchlist entry's `expected` year when it differs.
+
 ## 0.1.16 — 2026-07-07
 
 ### Fixed — youtube-comment-check tests freeze the clock (#30)
