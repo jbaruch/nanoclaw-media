@@ -2,6 +2,10 @@
 
 All notable changes to this plugin are documented here.
 
+### Changed — align CI Python to 3.14, matching the updated runtime base image (#43)
+
+The NanoClaw runtime base image moved to Python 3.14; `test.yml` now runs CI on 3.14 so the suite is exercised against the version production actually uses instead of the previous 3.11. Full gate (ruff format + check, pyright, 132 pytest cases) verified green on 3.14 locally before merge — no code changes needed.
+
 ## 0.1.33 — 2026-07-08
 
 ### Changed — backfill headings for the 0.1.30–0.1.32 Renovate releases
