@@ -12,17 +12,24 @@ directly with `YOUTUBE_API_KEY`:
   2. videos.list?id=<ids> — titles for the videos those comments landed
      on (one batched call).
 
-Comments are filtered to the last `--days` (default 7) by each thread's
-top-level-comment `publishedAt`, then grouped by video.
+Comments are filtered by each thread's top-level-comment `publishedAt`
+to a window that, when a `--cursor` is given, spans since the last
+successful run — so a week the check failed or was gated out is
+re-covered instead of lost outside a fixed 7-day window
+(jbaruch/nanoclaw#803). Without a usable cursor the window is `--days`
+(default 7). The lookback is bounded by `--max-days`. Comments are then
+grouped by video.
 
 Usage
 -----
     fetch-youtube-comments.py --channel-id <id> [--days 7]
+        [--cursor <path>] [--max-days 35]
 
 Output
 ------
 On success: single-line JSON on stdout, exit 0:
-    {"window_days": 7, "comment_count": N,
+    {"window_days": N, "window_source": "cursor|cursor_capped|default|cursor_unreadable",
+     "comment_count": N,
      "videos": [{"id", "title", "url",
                  "comments": [{"author", "text", "published_at"}]}]}
 `comment_count == 0` is a valid quiet-week result, not an error.
@@ -37,12 +44,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import sys
 import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 # rstrip the trailing slash so the `{API_BASE}/{path}` join never doubles.
 API_BASE = os.environ.get("YOUTUBE_API_BASE", "https://www.googleapis.com/youtube/v3").rstrip("/")
@@ -53,6 +62,13 @@ MAX_THREAD_PAGES = 5
 # videos.list caps the `id` parameter at 50 ids per request.
 VIDEOS_LIST_MAX_IDS = 50
 WATCH_URL = "https://www.youtube.com/watch?v="
+# Cursor shape written by stamp-cursor.py; the fetch reads it (never writes).
+CURSOR_SCHEMA_VERSION = 1
+# Upper bound on a cursor-derived lookback so a long outage can't widen the
+# window without limit (and keeps the fetch under MAX_THREAD_PAGES for a
+# personal channel). A gap longer than this loses the oldest comments — an
+# extreme edge the operator would already be seeing surfaced errors for.
+DEFAULT_MAX_LOOKBACK_DAYS = 35
 
 
 class YouTubeError(RuntimeError):
@@ -98,6 +114,64 @@ def _utcnow() -> datetime:
     """Current UTC time; the single clock read, split out so tests can
     freeze it (coding-policy testing-standards: control the clock)."""
     return datetime.now(timezone.utc)
+
+
+def _window_days_from_cursor(
+    cursor_path: str | None,
+    now: datetime,
+    default_days: int,
+    max_days: int,
+) -> tuple[int, str]:
+    """Resolve the fetch window (whole days) from the success cursor.
+
+    The cursor (`stamp-cursor.py`, schema v1) records the previous
+    successful run's completion time. Fetching *since* that instant —
+    rather than a fixed `--days` — re-covers a week the check failed or
+    was gated out, whose comments would otherwise fall outside a fixed
+    7-day window forever (jbaruch/nanoclaw#803). Bounded by `max_days`
+    so a long outage can't widen the lookback without limit.
+
+    Returns `(days, source)`. `source` is one of `cursor`,
+    `cursor_capped`, `default` (no cursor path, blank/absent file, or a
+    non-positive age), or `cursor_unreadable` (any read/parse/schema/tz
+    problem — fail back to the default window rather than crash the
+    fetch; the precheck already fail-opens a corrupt cursor to a wake).
+    """
+    if not cursor_path:
+        return default_days, "default"
+    try:
+        text = Path(cursor_path).read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return default_days, "default"
+    except (OSError, UnicodeDecodeError):
+        return default_days, "cursor_unreadable"
+    if not text.strip():
+        return default_days, "default"
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:
+        return default_days, "cursor_unreadable"
+    if not isinstance(data, dict) or data.get("schema_version") != CURSOR_SCHEMA_VERSION:
+        return default_days, "cursor_unreadable"
+    last_run_raw = data.get("last_run")
+    if not isinstance(last_run_raw, str):
+        return default_days, "cursor_unreadable"
+    normalised = last_run_raw[:-1] + "+00:00" if last_run_raw.endswith("Z") else last_run_raw
+    try:
+        last_run = datetime.fromisoformat(normalised)
+    except ValueError:
+        return default_days, "cursor_unreadable"
+    if last_run.tzinfo is None:
+        return default_days, "cursor_unreadable"
+    age = now - last_run
+    if age <= timedelta(0):
+        # Cursor at/after now (clock skew / future stamp) — nothing older
+        # to widen for; the default window is the safe floor.
+        return default_days, "default"
+    days = max(1, math.ceil(age.total_seconds() / 86400.0))
+    if days > max_days:
+        return max_days, "cursor_capped"
+    return days, "cursor"
 
 
 def _fetch_recent_threads(channel_id: str, cutoff: datetime, api_key: str) -> list:
@@ -154,8 +228,9 @@ def _fetch_recent_threads(channel_id: str, cutoff: datetime, api_key: str) -> li
         # non-zero, no stdout) rather than returning a partial payload with
         # exit 0, which would let the skill stamp its success cursor and
         # suppress retries for the un-fetched comments. A personal channel's
-        # 7-day window fits well under the cap, so this is a busy-channel
-        # signal the operator should act on (raise the cap / narrow the run).
+        # bounded lookback window fits well under the cap, so this is a
+        # busy-channel signal the operator should act on (raise the cap /
+        # narrow the window).
         if page_token:
             raise YouTubeError(
                 f"hit the {MAX_THREAD_PAGES}-page cap with more comment threads pending; "
@@ -205,13 +280,39 @@ def _group_by_video(comments: list, titles: dict) -> list:
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="Fetch recent YouTube channel comments")
     parser.add_argument("--channel-id", required=True)
-    parser.add_argument("--days", type=int, default=7)
+    parser.add_argument(
+        "--days",
+        type=int,
+        default=7,
+        help="Fallback lookback window in days when no cursor is available (default: %(default)s).",
+    )
+    parser.add_argument(
+        "--cursor",
+        default=None,
+        help=(
+            "Path to the success cursor. When present and readable, the window "
+            "spans since the last successful run instead of --days, so a missed "
+            "week is re-covered. Falls back to --days otherwise."
+        ),
+    )
+    parser.add_argument(
+        "--max-days",
+        type=int,
+        default=DEFAULT_MAX_LOOKBACK_DAYS,
+        help="Upper bound on a cursor-derived window (default: %(default)s).",
+    )
     args = parser.parse_args(argv)
 
     if args.days <= 0:
         sys.stderr.write(
             f"fetch-youtube-comments: --days must be positive (got {args.days}); "
             "a non-positive window would disable the cutoff filter.\n"
+        )
+        return 2
+
+    if args.max_days <= 0:
+        sys.stderr.write(
+            f"fetch-youtube-comments: --max-days must be positive (got {args.max_days}).\n"
         )
         return 2
 
@@ -223,7 +324,11 @@ def main(argv=None) -> int:
         )
         return 2
 
-    cutoff = _utcnow() - timedelta(days=args.days)
+    now = _utcnow()
+    window_days, window_source = _window_days_from_cursor(
+        args.cursor, now, args.days, args.max_days
+    )
+    cutoff = now - timedelta(days=window_days)
     try:
         comments = _fetch_recent_threads(args.channel_id, cutoff, api_key)
         titles = _fetch_titles(sorted({c["video_id"] for c in comments if c["video_id"]}), api_key)
@@ -232,7 +337,8 @@ def main(argv=None) -> int:
         return 1
 
     result = {
-        "window_days": args.days,
+        "window_days": window_days,
+        "window_source": window_source,
         "comment_count": len(comments),
         "videos": _group_by_video(comments, titles),
     }

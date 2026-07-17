@@ -2,9 +2,9 @@
 
 The epic (`jbaruch/nanoclaw#404`) lists the precheck signal for this sub-skill as "YouTube channel comment-count delta since last run". Two options were considered:
 
-## Rejected — comment-count gate via Composio call
+## Rejected — comment-count gate via a YouTube API call in the precheck
 
-Have the precheck call YouTube (via Composio's REST surface) and count comments in the last 7 days. Wake only when the count is positive.
+Have the precheck call the YouTube Data API and count comments in the last 7 days. Wake only when the count is positive.
 
 Why rejected (same reasoning slice 1's `nightly-undated-task-sweep` applied to a Tasks-API gate):
 
@@ -14,7 +14,9 @@ Why rejected (same reasoning slice 1's `nightly-undated-task-sweep` applied to a
 
 ## Chosen — filesystem cadence cap
 
-Precheck reads `<state_dir>/youtube-comment-check-cursor.json`. If `last_run` is missing or older than `CADENCE = 7d`, wake; otherwise skip. The skill stamps the cursor on Step 2 success.
+Precheck reads `<state_dir>/youtube-comment-check-cursor.json`. If `last_run` is missing or older than the cadence cap (value in `scripts/precheck-youtube-comment-check.py`), wake; otherwise skip. The skill stamps the cursor on Step 2 success.
+
+The cap sits below the weekly cron interval, not at it. The cursor stamps at run *completion*, so a cap equal to the 168h interval would leave every same-time weekly fire a few minutes short (~167.8h) and skip forever. The value and the `jbaruch/nanoclaw#803` / `nanoclaw-admin#353` near-miss rationale live in the precheck's `CADENCE` comment.
 
 Why this works:
 
@@ -24,4 +26,4 @@ Why this works:
 
 ## When to revisit
 
-If `task_run_logs` shows the gating savings are insufficient (e.g. the check wakes every cycle because the cursor write keeps failing, or 7d is too tight for the actual rate of new comments), revisit the option matrix. A count-based gate via the YouTube API remains an option once the OAuth / failure-mode concerns above are addressed at the plugin level — likely as a shared "Composio precheck client" sitting alongside `heartbeat-checks.py`, not as a per-skill ad-hoc.
+If `task_run_logs` shows the gating savings are insufficient (e.g. the check wakes every cycle because the cursor write keeps failing, or the cap is too tight for the actual rate of new comments), revisit the option matrix. A count-based gate via the YouTube API remains an option once the OAuth / failure-mode concerns above are addressed at the plugin level — as a shared precheck client, not a per-skill ad-hoc.

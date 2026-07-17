@@ -31,8 +31,8 @@ Per `coding-policy: stateful-artifacts`: every stateful artifact ships a schema 
 ## Lifecycle
 
 - **First run / fresh install** — cursor is absent. The precheck returns `wake_agent: true` with `reason: "no_cursor"`. The first successful check creates the file.
-- **Steady state** — precheck reads the cursor; gates `wake_agent: false` when `now_utc - last_run < 7d`, otherwise `wake_agent: true`.
-- **Check failure** — Step 2 (fetch) OR Step 3 (`mcp__nanoclaw__send_message` if comments needed reporting) fails; Step 4 is skipped intentionally. The cursor stays at its prior value, so the next eligible cycle's precheck either keeps gating (if still inside the 7-day window) or wakes the agent for a retry (if the window has elapsed). The "Step 3 fail then stamp" anti-pattern would gate the next 7d window even though Baruch never saw the comments — Step 4's "Steps 2 AND 3 both succeeded" gate prevents that.
+- **Steady state** — precheck reads the cursor; gates `wake_agent: false` when `now_utc - last_run` is under the precheck's `CADENCE` cap, otherwise `wake_agent: true`.
+- **Check failure** — Step 2 (fetch) OR Step 3 (`mcp__nanoclaw__send_message` if comments needed reporting) fails; Step 4 is skipped intentionally. The cursor stays at its prior value, so the next eligible cycle's precheck either keeps gating (if still inside the cap window) or wakes the agent for a retry (once the cap has elapsed). The "Step 3 fail then stamp" anti-pattern would gate the next cap window even though Baruch never saw the comments — Step 4's "Steps 2 AND 3 both succeeded" gate prevents that. Because the fetch window is driven from this cursor (not a fixed 7 days), the retry re-covers the comments the failed run missed rather than losing them outside a fixed window.
 - **Cursor corruption** — any read error (missing keys, malformed JSON, naive datetime, schema mismatch) flips the precheck to fail-open (`wake_agent: true`). The next successful check stamps a fresh cursor that self-heals the corruption.
 
 ## Migration policy

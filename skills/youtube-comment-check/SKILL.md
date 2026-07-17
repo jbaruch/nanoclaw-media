@@ -12,18 +12,21 @@ script: "scripts/precheck-youtube-comment-check.py"
 
 Run this check silently. Report only if new comments appear or a tool error surfaces.
 
-The fire-time precheck (`scripts/precheck-youtube-comment-check.py`) gates wake-ups by a 7-day cadence cap on a filesystem cursor. See `references/cadence-rationale.md` for why a comment-count delta gate (querying YouTube in the precheck) was rejected in favour of cadence-only.
+The fire-time precheck (`scripts/precheck-youtube-comment-check.py`) gates wake-ups by the weekly cadence cap (value in the precheck's `CADENCE`) on a filesystem cursor. See `references/cadence-rationale.md` for why a comment-count delta gate (querying YouTube in the precheck) was rejected in favour of cadence-only.
 
 ## Step 1 — Fetch recent comments on Baruch's channel
 
-Composio's YouTube toolkit has no comment-threads tool, so this skill uses the native YouTube Data API v3 (`YOUTUBE_API_KEY`) per the `Composio Tool Access` rule's "Out of Composio's reach" note. Channel ID: `UCZ8-VX2SiAIBE7guw7NG-Sg`. Fetch the last 7 days of comment threads across the channel via the fetch script:
+This skill uses the native YouTube Data API v3 (`YOUTUBE_API_KEY`) — the comment-threads surface has no equivalent elsewhere. Channel ID: `UCZ8-VX2SiAIBE7guw7NG-Sg`. Fetch comment threads since the last successful run (falling back to 7 days on first run, bounded to 35 days) via the fetch script:
 
 ```bash
 python3 /home/node/.claude/skills/tessl__youtube-comment-check/scripts/fetch-youtube-comments.py \
-  --channel-id UCZ8-VX2SiAIBE7guw7NG-Sg --days 7
+  --channel-id UCZ8-VX2SiAIBE7guw7NG-Sg --days 7 \
+  --cursor /workspace/group/state/youtube-comment-check-cursor.json --max-days 35
 ```
 
-Stdout (exit 0): `{"window_days", "comment_count", "videos": [{"id", "title", "url", "comments": [{"author", "text", "published_at"}]}]}`. `comment_count == 0` is a valid quiet-week result.
+The `--cursor` widens the window to cover a week the check failed or was gated out, so those comments are re-fetched rather than lost outside a fixed 7-day window; without a usable cursor the window is `--days`.
+
+Stdout (exit 0): `{"window_days", "window_source", "comment_count", "videos": [{"id", "title", "url", "comments": [{"author", "text", "published_at"}]}]}`. `comment_count == 0` is a valid quiet-week result.
 
 On non-zero exit (missing `YOUTUBE_API_KEY`, auth/quota error, network timeout, transient 5xx), surface the script's stderr verbatim via `mcp__nanoclaw__send_message` and stop. Do NOT advance the cursor in Step 3 — it advances only on success. Every subsequent eligible fire (the next weekly slot, or any continuation / manual re-run while the cursor is older than the cap) retries; there is no "wait one week" on a failed run.
 

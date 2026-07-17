@@ -3,8 +3,8 @@
 Locks down the documented contract:
 
   - Cursor absent → wake (no_cursor).
-  - Cursor present, last_run within 7d → no-wake (within_cadence).
-  - Cursor present, last_run >= 7d → wake (cadence_elapsed).
+  - Cursor present, last_run within the cap → no-wake (within_cadence).
+  - Cursor present, last_run >= the cap → wake (cadence_elapsed).
   - Future timestamp → wake (cursor_future).
   - Any cursor read / parse / schema failure → fail-open wake
     (cursor_error / cursor_unparseable / cursor_naive_datetime).
@@ -71,7 +71,7 @@ def test_decide_no_wake_within_cadence(precheck, tmp_path):
     assert result["wake_agent"] is False
     assert result["data"]["reason"] == "within_cadence"
     assert result["data"]["age_hours"] == pytest.approx(48.0)
-    assert result["data"]["cadence_hours"] == pytest.approx(168.0)
+    assert result["data"]["cadence_hours"] == pytest.approx(144.0)
 
 
 def test_decide_wakes_when_cadence_elapsed(precheck, tmp_path):
@@ -84,10 +84,14 @@ def test_decide_wakes_when_cadence_elapsed(precheck, tmp_path):
     assert result["data"]["age_hours"] == pytest.approx(216.0)
 
 
-def test_decide_wakes_at_seven_day_boundary(precheck, tmp_path):
-    """Boundary: age == CADENCE → wake (the rule is `age >= CADENCE`)."""
+def test_decide_wakes_at_weekly_near_miss(precheck, tmp_path):
+    # jbaruch/nanoclaw#803, nanoclaw-admin#353: the cursor stamps at run
+    # completion, so the next same-time weekly fire lands a few minutes short
+    # of 168h (~167.8h here). With the cap below the cron interval this MUST
+    # wake; a 168h cap skipped forever. Guards against the cap regressing back
+    # to the weekly interval.
     cursor = tmp_path / "cursor.json"
-    cursor.write_text(json.dumps({"schema_version": 1, "last_run": "2026-04-25T03:00:00Z"}))
+    cursor.write_text(json.dumps({"schema_version": 1, "last_run": "2026-04-25T03:12:00Z"}))
     now = datetime(2026, 5, 2, 3, 0, tzinfo=timezone.utc)
     result = precheck.decide(now, cursor)
     assert result["wake_agent"] is True

@@ -286,3 +286,130 @@ def test_nonpositive_days_exits_2(server, capsys):
     assert rc == 2
     assert "--days must be positive" in out.err
     assert out.out.strip() == ""
+
+
+def test_nonpositive_max_days_exits_2(server, capsys):
+    module = _load()
+    rc = module.main(["--channel-id", CHANNEL, "--max-days", "0"])
+    out = capsys.readouterr()
+    assert rc == 2
+    assert "--max-days must be positive" in out.err
+    assert out.out.strip() == ""
+
+
+# ---------------------------------------------------------------------------
+# _window_days_from_cursor — the fetch window spans since the last success
+# (jbaruch/nanoclaw#803) so a missed week is re-covered, not lost.
+# ---------------------------------------------------------------------------
+
+
+def _write_cursor(tmp_path, last_run):
+    cursor = tmp_path / "cursor.json"
+    cursor.write_text(json.dumps({"schema_version": 1, "last_run": last_run}))
+    return cursor
+
+
+def test_window_default_when_no_cursor_path():
+    module = _load()
+    assert module._window_days_from_cursor(None, FROZEN_NOW, 7, 35) == (7, "default")
+
+
+def test_window_default_when_cursor_absent(tmp_path):
+    module = _load()
+    missing = tmp_path / "nope.json"
+    assert module._window_days_from_cursor(str(missing), FROZEN_NOW, 7, 35) == (7, "default")
+
+
+def test_window_default_when_cursor_blank(tmp_path):
+    module = _load()
+    cursor = tmp_path / "cursor.json"
+    cursor.write_text("   \n")
+    assert module._window_days_from_cursor(str(cursor), FROZEN_NOW, 7, 35) == (7, "default")
+
+
+def test_window_spans_since_last_success(tmp_path):
+    module = _load()
+    cursor = _write_cursor(
+        tmp_path, (FROZEN_NOW - timedelta(days=10)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    )
+    assert module._window_days_from_cursor(str(cursor), FROZEN_NOW, 7, 35) == (10, "cursor")
+
+
+def test_window_ceils_partial_day(tmp_path):
+    # Weekly near-miss: cursor stamped ~6d23h ago rounds up to a 7-day window.
+    module = _load()
+    last_run = (FROZEN_NOW - timedelta(days=6, hours=23)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    cursor = _write_cursor(tmp_path, last_run)
+    assert module._window_days_from_cursor(str(cursor), FROZEN_NOW, 7, 35) == (7, "cursor")
+
+
+def test_window_capped_at_max_days(tmp_path):
+    module = _load()
+    cursor = _write_cursor(
+        tmp_path, (FROZEN_NOW - timedelta(days=100)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    )
+    assert module._window_days_from_cursor(str(cursor), FROZEN_NOW, 7, 35) == (35, "cursor_capped")
+
+
+def test_window_default_on_future_cursor(tmp_path):
+    module = _load()
+    cursor = _write_cursor(
+        tmp_path, (FROZEN_NOW + timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    )
+    assert module._window_days_from_cursor(str(cursor), FROZEN_NOW, 7, 35) == (7, "default")
+
+
+def test_window_unreadable_on_schema_mismatch(tmp_path):
+    module = _load()
+    cursor = tmp_path / "cursor.json"
+    cursor.write_text(json.dumps({"schema_version": 99, "last_run": "2026-06-01T00:00:00Z"}))
+    assert module._window_days_from_cursor(str(cursor), FROZEN_NOW, 7, 35) == (
+        7,
+        "cursor_unreadable",
+    )
+
+
+def test_window_unreadable_on_malformed_json(tmp_path):
+    module = _load()
+    cursor = tmp_path / "cursor.json"
+    cursor.write_text("{not json")
+    assert module._window_days_from_cursor(str(cursor), FROZEN_NOW, 7, 35) == (
+        7,
+        "cursor_unreadable",
+    )
+
+
+def test_window_unreadable_on_naive_datetime(tmp_path):
+    module = _load()
+    cursor = _write_cursor(tmp_path, "2026-06-01T00:00:00")  # no Z / offset
+    assert module._window_days_from_cursor(str(cursor), FROZEN_NOW, 7, 35) == (
+        7,
+        "cursor_unreadable",
+    )
+
+
+def test_main_uses_cursor_window_to_recover_missed_week(server, capsys, tmp_path):
+    # Cursor 20d old (a run that has been failing/gated): a comment 10d old
+    # falls outside the fixed 7-day default but inside the cursor window and
+    # MUST be fetched; one 25d old stays outside.
+    cursor = _write_cursor(
+        tmp_path, (FROZEN_NOW - timedelta(days=20)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    )
+    server.comment_pages = [
+        {
+            "items": [
+                _thread("vid1", "Alice", "ten days ago", FROZEN_NOW - timedelta(days=10)),
+                _thread("vid1", "Bob", "too old", FROZEN_NOW - timedelta(days=25)),
+            ]
+        }
+    ]
+    server.videos_response = {"items": [{"id": "vid1", "snippet": {"title": "T"}}]}
+    module = _load()
+    rc = module.main(["--channel-id", CHANNEL, "--days", "7", "--cursor", str(cursor)])
+    out = capsys.readouterr()
+    assert rc == 0, out.err
+    payload = json.loads(out.out.strip())
+    assert payload["window_days"] == 20
+    assert payload["window_source"] == "cursor"
+    assert payload["comment_count"] == 1
+    assert payload["videos"][0]["comments"][0]["text"] == "ten days ago"
