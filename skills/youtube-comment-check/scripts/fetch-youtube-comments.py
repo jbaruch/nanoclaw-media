@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Fetch recent comment threads on a YouTube channel over the native
-YouTube Data API v3 (nanoclaw-admin#339).
+YouTube Data API v3 (jbaruch/nanoclaw-admin#339).
 
 The comment-threads surface has no equivalent outside the native API,
 so this calls the YouTube Data API v3 directly with `YOUTUBE_API_KEY`:

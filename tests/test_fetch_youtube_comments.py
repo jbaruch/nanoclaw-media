@@ -1,6 +1,6 @@
 """Tests for skills/youtube-comment-check/scripts/fetch-youtube-comments.py.
 
-Locks down the native YouTube Data API v3 fetch contract (nanoclaw-admin#339):
+Locks down the native YouTube Data API v3 fetch contract (jbaruch/nanoclaw-admin#339):
 
   - commentThreads.list (allThreadsRelatedToChannelId) threads are
     filtered to the `--days` window and grouped by video

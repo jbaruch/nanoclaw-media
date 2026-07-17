@@ -85,7 +85,7 @@ def test_decide_wakes_when_cadence_elapsed(precheck, tmp_path):
 
 
 def test_decide_wakes_at_weekly_near_miss(precheck, tmp_path):
-    # jbaruch/nanoclaw#803, nanoclaw-admin#353: the cursor stamps at run
+    # jbaruch/nanoclaw#803, jbaruch/nanoclaw-admin#353: the cursor stamps at run
     # completion, so the next same-time weekly fire lands a few minutes short
     # of 168h (~167.8h here). With the cap below the cron interval this MUST
     # wake; a 168h cap skipped forever. Guards against the cap regressing back

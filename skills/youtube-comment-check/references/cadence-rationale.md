@@ -14,9 +14,7 @@ Why rejected (same reasoning slice 1's `nightly-undated-task-sweep` applied to a
 
 ## Chosen — filesystem cadence cap
 
-Precheck reads `<state_dir>/youtube-comment-check-cursor.json`. If `last_run` is missing or older than the cadence cap (value in `scripts/precheck-youtube-comment-check.py`), wake; otherwise skip. The skill stamps the cursor on Step 2 success.
-
-The cap sits below the weekly cron interval, not at it. The cursor stamps at run *completion*, so a cap equal to the 168h interval would leave every same-time weekly fire a few minutes short (~167.8h) and skip forever. The value and the `jbaruch/nanoclaw#803` / `nanoclaw-admin#353` near-miss rationale live in the precheck's `CADENCE` comment.
+Precheck reads `<state_dir>/youtube-comment-check-cursor.json`. If `last_run` is missing or older than the cadence cap (value in `scripts/precheck-youtube-comment-check.py`), wake; otherwise skip. The skill stamps the cursor in Step 3, after Steps 1 (fetch) and 2 (report) both succeed. The cap value and the reason it sits below the weekly cron interval live in the precheck's `CADENCE` comment (`jbaruch/nanoclaw#803`).
 
 Why this works:
 
