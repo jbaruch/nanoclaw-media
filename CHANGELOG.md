@@ -2,6 +2,14 @@
 
 All notable changes to this plugin are documented here.
 
+### Fix — youtube-comment-check cadence cap drops below the weekly cron interval (`jbaruch/nanoclaw#803`)
+
+`precheck-youtube-comment-check.py` set `CADENCE = timedelta(days=7)` — exactly the 168h weekly cron interval. The cursor stamps at run *completion*, so the next same-time weekly fire lands ~167.8h later, `age >= CADENCE` fails, and the precheck returns `within_cadence` — skipping every other week (a skipped run never re-stamps, so the following week clears at ~336h and runs). This is the same near-miss `jbaruch/nanoclaw-admin#353` / `jbaruch/nanoclaw-admin#354` fixed in `entertainment-sync` and `soul-searching`; `youtube-comment-check` was masked by the multi-week Composio outage (`jbaruch/nanoclaw-admin#370`) — while it failed weekly it never stamped a cursor to near-miss with. The cap drops to `timedelta(days=6)` (24h slack for run latency + DST); the weekly cron cannot double-fire on a sub-weekly cap. The `seven_day_boundary` test becomes `weekly_near_miss` (age ~167.8h must wake), guarding against a regression back to 168h. The cap value is de-hardcoded from `SKILL.md`, `state-schema.md`, and `references/cadence-rationale.md` per `coding-policy: script-as-black-box`.
+
+### Fix — youtube-comment-check fetch window spans since the last successful run (`jbaruch/nanoclaw#803`)
+
+`fetch-youtube-comments.py` filtered comments to a fixed `--days 7` window decoupled from the cursor, so a week the check failed or was gated out lost its comments permanently — they fall outside a fixed 7-day window on every later run. The fetch now takes `--cursor` and `--max-days`: when a readable cursor is present the window spans since the last successful run (bounded by `--max-days`, default 35), so a missed week is re-covered instead of lost; it falls back to `--days` on first run or any unreadable/corrupt cursor. Output carries `window_source` (`cursor`/`cursor_capped`/`default`/`cursor_unreadable`) for `task_run_logs` diagnostics. The stale `Composio Tool Access` rule reference in Step 1 (Composio is retired, `jbaruch/nanoclaw#639`) is dropped.
+
 ## 0.1.34 — 2026-07-08
 
 ### Changed — align CI Python to 3.14, matching the updated runtime base image (#43)

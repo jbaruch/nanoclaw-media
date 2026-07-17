@@ -2,9 +2,9 @@
 
 The epic (`jbaruch/nanoclaw#404`) lists the precheck signal for this sub-skill as "YouTube channel comment-count delta since last run". Two options were considered:
 
-## Rejected — comment-count gate via Composio call
+## Rejected — comment-count gate via a YouTube API call in the precheck
 
-Have the precheck call YouTube (via Composio's REST surface) and count comments in the last 7 days. Wake only when the count is positive.
+Have the precheck call the YouTube Data API and count comments in the last 7 days. Wake only when the count is positive.
 
 Why rejected (same reasoning slice 1's `nightly-undated-task-sweep` applied to a Tasks-API gate):
 
@@ -14,14 +14,14 @@ Why rejected (same reasoning slice 1's `nightly-undated-task-sweep` applied to a
 
 ## Chosen — filesystem cadence cap
 
-Precheck reads `<state_dir>/youtube-comment-check-cursor.json`. If `last_run` is missing or older than `CADENCE = 7d`, wake; otherwise skip. The skill stamps the cursor on Step 2 success.
+Precheck reads `<state_dir>/youtube-comment-check-cursor.json`. If `last_run` is missing or older than the cadence cap (value in `scripts/precheck-youtube-comment-check.py`), wake; otherwise skip. The skill stamps the cursor in Step 3, after Steps 1 (fetch) and 2 (report) both succeed. The cap value and the reason it sits below the weekly cron interval live in the precheck's `CADENCE` comment (`jbaruch/nanoclaw#803`).
 
 Why this works:
 
 - **Matches the existing precheck idiom.** Read-only filesystem check, no network, fails open on parse errors.
-- **Aligned with the epic's proposed cadence.** The epic table proposes "weekly" — 7d is the same target stated as a cap rather than a fixed schedule, which composes better with the orchestrator's Sunday-4am cron pattern.
+- **Aligned with the epic's proposed cadence.** The epic table proposes "weekly" — the cap targets that weekly cadence rather than a fixed schedule, which composes better with the orchestrator's Sunday-4am cron pattern.
 - **Empirically verifiable.** `task_run_logs` will show the check fire at most once per ISO week; on weeks where weekly-housekeeping fires multiple times (continuation cycle, manual re-run), only the first fire reaches Step 2.
 
 ## When to revisit
 
-If `task_run_logs` shows the gating savings are insufficient (e.g. the check wakes every cycle because the cursor write keeps failing, or 7d is too tight for the actual rate of new comments), revisit the option matrix. A count-based gate via the YouTube API remains an option once the OAuth / failure-mode concerns above are addressed at the plugin level — likely as a shared "Composio precheck client" sitting alongside `heartbeat-checks.py`, not as a per-skill ad-hoc.
+If `task_run_logs` shows the gating savings are insufficient (e.g. the check wakes every cycle because the cursor write keeps failing, or the cap is too tight for the actual rate of new comments), revisit the option matrix. A count-based gate via the YouTube API remains an option once the OAuth / failure-mode concerns above are addressed at the plugin level — as a shared precheck client, not a per-skill ad-hoc.

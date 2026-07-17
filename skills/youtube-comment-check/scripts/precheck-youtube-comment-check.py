@@ -37,7 +37,11 @@ import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-CADENCE = timedelta(days=7)
+# 6d, not the 168h weekly cron interval: the cursor stamps at run completion,
+# so a 168h cap perpetually near-misses (next same-time fire age ~167.8h < 168h)
+# and skips forever. The 24h slack absorbs run latency + DST. jbaruch/nanoclaw#803,
+# jbaruch/nanoclaw-admin#353.
+CADENCE = timedelta(days=6)
 DEFAULT_CURSOR_PATH = "/workspace/group/state/youtube-comment-check-cursor.json"
 SUPPORTED_SCHEMA_VERSION = 1
 
