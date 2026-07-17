@@ -2,10 +2,8 @@
 """Fetch recent comment threads on a YouTube channel over the native
 YouTube Data API v3 (nanoclaw-admin#339).
 
-Composio's YouTube toolkit has no comment-threads tool, so this skill
-cannot run on Composio at all (the `Composio Tool Access` rule's
-"Out of Composio's reach" note). It calls the YouTube Data API v3
-directly with `YOUTUBE_API_KEY`:
+The comment-threads surface has no equivalent outside the native API,
+so this calls the YouTube Data API v3 directly with `YOUTUBE_API_KEY`:
 
   1. commentThreads.list?allThreadsRelatedToChannelId=<channel> — recent
      threads across every video on the channel, newest first, paginated.

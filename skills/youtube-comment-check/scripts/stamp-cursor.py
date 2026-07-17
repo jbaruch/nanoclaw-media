@@ -3,7 +3,7 @@
 
 Atomic-writes `<state_dir>/youtube-comment-check-cursor.json` with the
 current UTC timestamp. The precheck reads this file's `last_run` to
-gate wake-ups by the 7-day cadence cap.
+gate wake-ups by the cadence cap (value in the precheck).
 
 Schema (v1):
     {

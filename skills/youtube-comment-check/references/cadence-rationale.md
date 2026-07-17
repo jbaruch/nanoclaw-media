@@ -21,7 +21,7 @@ The cap sits below the weekly cron interval, not at it. The cursor stamps at run
 Why this works:
 
 - **Matches the existing precheck idiom.** Read-only filesystem check, no network, fails open on parse errors.
-- **Aligned with the epic's proposed cadence.** The epic table proposes "weekly" — 7d is the same target stated as a cap rather than a fixed schedule, which composes better with the orchestrator's Sunday-4am cron pattern.
+- **Aligned with the epic's proposed cadence.** The epic table proposes "weekly" — the cap targets that weekly cadence rather than a fixed schedule, which composes better with the orchestrator's Sunday-4am cron pattern.
 - **Empirically verifiable.** `task_run_logs` will show the check fire at most once per ISO week; on weeks where weekly-housekeeping fires multiple times (continuation cycle, manual re-run), only the first fire reaches Step 2.
 
 ## When to revisit
