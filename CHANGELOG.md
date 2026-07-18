@@ -2,6 +2,8 @@
 
 All notable changes to this plugin are documented here.
 
+## 0.1.35 — 2026-07-18
+
 ### Fix — youtube-comment-check cadence cap drops below the weekly cron interval (`jbaruch/nanoclaw#803`)
 
 `precheck-youtube-comment-check.py` set `CADENCE = timedelta(days=7)` — exactly the 168h weekly cron interval. The cursor stamps at run *completion*, so the next same-time weekly fire lands ~167.8h later, `age >= CADENCE` fails, and the precheck returns `within_cadence` — skipping every other week (a skipped run never re-stamps, so the following week clears at ~336h and runs). This is the same near-miss `jbaruch/nanoclaw-admin#353` / `jbaruch/nanoclaw-admin#354` fixed in `entertainment-sync` and `soul-searching`; `youtube-comment-check` was masked by the multi-week Composio outage (`jbaruch/nanoclaw-admin#370`) — while it failed weekly it never stamped a cursor to near-miss with. The cap drops to `timedelta(days=6)` (24h slack for run latency + DST); the weekly cron cannot double-fire on a sub-weekly cap. The `seven_day_boundary` test becomes `weekly_near_miss` (age ~167.8h must wake), guarding against a regression back to 168h. The cap value is de-hardcoded from `SKILL.md`, `state-schema.md`, and `references/cadence-rationale.md` per `coding-policy: script-as-black-box`.
