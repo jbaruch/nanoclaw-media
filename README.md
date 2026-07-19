@@ -8,7 +8,7 @@ Per-chat overlay tile. Install via NanoClaw's `containerConfig.additionalTiles` 
 
 ## Capabilities
 
-1. **Trakt watch-history sync** — pulls shows/movies/ratings from the Trakt API into `trakt-history.json` (OAuth token auto-refresh on 401)
+1. **Trakt watch-history sync** — pulls shows/movies/ratings from the Trakt API into `trakt-history.json`, routed in-container through the OneCLI gateway (the gateway owns Trakt OAuth + refresh)
 2. **Show recommendations** — ranks unwatched titles from Netflix history, IMDb ratings, and Trakt history; tracks upcoming shows in `watchlist.json`
 3. **Audiobook recommendations** — filters the Audible library by genre/rating, finds series continuations and new releases from favorite authors
 4. **Watchlist release checks** — nightly check of `watchlist.json`, Telegram notification when a tracked show is released
@@ -34,13 +34,10 @@ Load the overlay at the **main or trusted** tier — the cadence skills material
 
 | Variable | Used by | Purpose |
 |----------|---------|---------|
-| `TRAKT_CLIENT_ID` | trakt-watch-history, entertainment-sync | Trakt API client id |
-| `TRAKT_ACCESS_TOKEN` | trakt-watch-history, entertainment-sync | Trakt OAuth access token |
-| `TRAKT_REFRESH_TOKEN` | trakt-watch-history | Trakt OAuth refresh token (auto-refresh on 401) |
-| `TRAKT_CLIENT_SECRET` | trakt-watch-history | Trakt OAuth client secret (token refresh) |
+| `TRAKT_CLIENT_ID` | trakt-watch-history, entertainment-sync | Trakt API client id (not a secret) |
 | `YOUTUBE_API_KEY` | youtube-comment-check | YouTube Data API v3 key |
 
-NanoClaw forwards these into main/trusted containers. The recommendation skills (`recommend-shows`, `recommend-books`) consume no secrets — they read owner-uploaded CSV/JSON data.
+NanoClaw forwards these into main/trusted containers. Trakt watch-history requests route through the OneCLI gateway, which injects the Trakt OAuth token and handles refresh — no Trakt access/refresh token lives in the container or `.env`. The recommendation skills (`recommend-shows`, `recommend-books`) consume no secrets — they read owner-uploaded CSV/JSON data.
 
 ## Runtime data
 
