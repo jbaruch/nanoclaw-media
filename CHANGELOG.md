@@ -2,6 +2,8 @@
 
 All notable changes to this plugin are documented here.
 
+## 0.1.38 — 2026-07-19
+
 ### Changed — Trakt fetch routes through the OneCLI gateway, in-container (#57)
 
 `trakt-watch-history` no longer calls the host `mcp__nanoclaw__fetch_trakt_history` handler. The fetch script now runs in-container and hits `api.trakt.tv` through the OneCLI gateway proxy (a live custom-oauth connection on the NAS gateway): it sends `trakt-api-key` from `TRAKT_CLIENT_ID` (not a secret), `trakt-api-version: 2`, the browser User-Agent Cloudflare requires, and a placeholder `Authorization: Bearer onecli-managed` the gateway swaps for the real token. All `TRAKT_ACCESS_TOKEN` / `TRAKT_REFRESH_TOKEN` reads and the 401-driven refresh/env-persistence logic are removed — the gateway owns Trakt auth + refresh. The script writes `/workspace/group/trakt-history.json` itself (atomic write, destination via `TRAKT_HISTORY_OUT`; a failed fetch leaves any prior record untouched) and prints the same record to stdout; a 401/403 now points the operator at reconnecting the gateway rather than a local device-code re-auth. `SKILL.md`, `entertainment-sync`, and `recommend-shows` Step 1 run the in-container script instead of the MCP tool; the schema/writer-reader contract, README, and `.env.example` drop the retired token variables (keeping only `TRAKT_CLIENT_ID`). Unblocks retiring the host handler (`jbaruch/nanoclaw#748` Trakt half / `#741`); the container-spawn env wiring and host-handler removal land as separate nanoclaw-core PRs.
