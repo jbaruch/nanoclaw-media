@@ -16,9 +16,15 @@ Fire-time precheck (`scripts/precheck-entertainment-sync.py`) gates wake-ups by 
 
 ## Step 1 — Refresh Trakt watch history
 
-Run `mcp__nanoclaw__fetch_trakt_history()`. Saves to `/workspace/group/trakt-history.json`. Silent on success. Report on error or `total_shows: 0` (if sync hasn't run yet, skip silently).
+Run the in-container fetch script (routes through the OneCLI gateway, writes `/workspace/group/trakt-history.json` on success):
 
-If the MCP call fails (transport error), surface verbatim via `mcp__nanoclaw__send_message`, then emit `<internal>entertainment-sync exited step-1: mcp-fail</internal>` as your final turn text and stop. Do NOT advance the cursor. Otherwise proceed to Step 2.
+```bash
+python3 /home/node/.claude/skills/tessl__trakt-watch-history/scripts/trakt-watch-history.py
+```
+
+Silent on success. Report on error (stdout `{"error": ...}` / non-zero exit) or `total_shows: 0` (if sync hasn't run yet, skip silently).
+
+If the script fails, surface its stdout/stderr verbatim via `mcp__nanoclaw__send_message`, then emit `<internal>entertainment-sync exited step-1: fetch-fail</internal>` as your final turn text and stop. Do NOT advance the cursor. Otherwise proceed to Step 2.
 
 ## Step 2 — Check watchlist
 

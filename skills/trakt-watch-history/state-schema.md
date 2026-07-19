@@ -42,9 +42,9 @@ Field promises: `shows` and `movies` are always present (possibly empty arrays) 
 
 | Skill | Role | Promise |
 |---|---|---|
-| `trakt-watch-history` (via `fetch_trakt_history` MCP) | writer + owner | Emits every field above on every successful run, stamped with the current `schema_version` |
-| `entertainment-sync` (Step 1) | writer trigger | Invokes the same MCP fetch; never writes the file itself |
-| `recommend-shows` (Step 1 trigger, Steps 2–5 reader) | writer trigger + reader | Step 1 invokes the same MCP fetch (never writes the file itself, never migrates). Reads `shows[*].title`, `year`, `slug`, `episodes_watched`, `last_watched`, `rating` and `movies[*].title`, `year`, `rating` for classification and taste signals; tolerates a missing file (no prior state) |
+| `trakt-watch-history` (in-container fetch script) | writer + owner | The script atomic-writes every field above on every successful run, stamped with the current `schema_version` (destination `TRAKT_HISTORY_OUT`, default this path) |
+| `entertainment-sync` (Step 1) | writer trigger | Runs the same fetch script; never writes the file itself |
+| `recommend-shows` (Step 1 trigger, Steps 2–5 reader) | writer trigger + reader | Step 1 runs the same fetch script (never writes the file itself, never migrates). Reads `shows[*].title`, `year`, `slug`, `episodes_watched`, `last_watched`, `rating` and `movies[*].title`, `year`, `rating` for classification and taste signals; tolerates a missing file (no prior state) |
 
 ## Migration Policy
 

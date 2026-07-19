@@ -9,9 +9,13 @@ Process steps in order. Do not skip ahead.
 
 ## Step 1 — Fetch History
 
-Call `mcp__nanoclaw__fetch_trakt_history()` to retrieve history.
+Run the in-container fetch script. It routes Trakt requests through the OneCLI gateway (the gateway injects the token), writes `/workspace/group/trakt-history.json` atomically on success, and prints the same record to stdout:
 
-The fetch returns JSON (field names shown schematically, not literal JSON):
+```bash
+python3 /home/node/.claude/skills/tessl__trakt-watch-history/scripts/trakt-watch-history.py
+```
+
+The script prints JSON (field names shown schematically, not literal JSON):
 ```text
 {
   "schema_version": 1,

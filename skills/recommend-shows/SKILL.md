@@ -9,13 +9,13 @@ Process steps in order. Do not skip ahead.
 
 ## Step 1 — Refresh Trakt History (MANDATORY)
 
-Before reading `trakt-history.json`, refresh it:
+Before reading `trakt-history.json`, refresh it via the in-container fetch script (routes through the OneCLI gateway, writes the file on success):
 
-```
-mcp__nanoclaw__fetch_trakt_history()
+```bash
+python3 /home/node/.claude/skills/tessl__trakt-watch-history/scripts/trakt-watch-history.py
 ```
 
-Writes fresh `/workspace/group/trakt-history.json`. Skipping the refresh risks recommending already-watched shows. On MCP failure, proceed with the existing file but add this staleness note as the FIRST line of Step 8's output (before pitches): `<i>⚠️ Trakt refresh failed — using cached history as of {mtime, ISO date}. Recommendations may include already-watched titles.</i>`. Do NOT fabricate freshness; do NOT bury the note.
+Writes fresh `/workspace/group/trakt-history.json`. Skipping the refresh risks recommending already-watched shows. On fetch failure (stdout `{"error": ...}` / non-zero exit), proceed with the existing file but add this staleness note as the FIRST line of Step 8's output (before pitches): `<i>⚠️ Trakt refresh failed — using cached history as of {mtime, ISO date}. Recommendations may include already-watched titles.</i>`. Do NOT fabricate freshness; do NOT bury the note.
 
 Proceed immediately to Step 2.
 
@@ -23,7 +23,7 @@ Proceed immediately to Step 2.
 
 - `/workspace/group/netflix-history.csv` — Netflix history. Format: `"Show Name: Season X: Episode Name", "date"` — split on `: `. Single-part titles are movies (skip). Group by show name.
 - `/workspace/group/imdb-ratings.csv` — Explicit ratings (Const, Your Rating 1–10, Title, Title Type, Year, Genres). ~160 entries.
-- `/workspace/group/trakt-history.json` — Trakt watch history. Format: object `{"schema_version": 1, "shows": [...], "movies": [...], "stats": {...}, "fetched_at": "ISO 8601 UTC timestamp"}`. Each show: `{"title", "year", "trakt_id", "slug", "episodes_watched", "last_watched", "rating"}` — `episodes_watched` is an aggregate count, `last_watched` an ISO timestamp, `rating` Baruch's own 1–10 rating or null. Movies carry the same fields minus `episodes_watched`. Full contract: `skills/trakt-watch-history/state-schema.md` (owner: trakt-watch-history; this skill triggers the rewrite via Step 1's MCP fetch and reads the result — it never writes the file itself and never migrates). A record without `schema_version` is legacy pre-v1 — same shape, read it as v1. A record with `schema_version` > 1 is no usable prior state — rely on the Step 1 refresh. **Refreshed in Step 1 — trust Trakt over CSVs for recency.** On Step 1 failure, Step 3 still applies and Step 8's staleness preamble discloses the age.
+- `/workspace/group/trakt-history.json` — Trakt watch history. Format: object `{"schema_version": 1, "shows": [...], "movies": [...], "stats": {...}, "fetched_at": "ISO 8601 UTC timestamp"}`. Each show: `{"title", "year", "trakt_id", "slug", "episodes_watched", "last_watched", "rating"}` — `episodes_watched` is an aggregate count, `last_watched` an ISO timestamp, `rating` Baruch's own 1–10 rating or null. Movies carry the same fields minus `episodes_watched`. Full contract: `skills/trakt-watch-history/state-schema.md` (owner: trakt-watch-history; this skill triggers the rewrite via Step 1's in-container fetch script and reads the result — it never writes the file itself and never migrates). A record without `schema_version` is legacy pre-v1 — same shape, read it as v1. A record with `schema_version` > 1 is no usable prior state — rely on the Step 1 refresh. **Refreshed in Step 1 — trust Trakt over CSVs for recency.** On Step 1 failure, Step 3 still applies and Step 8's staleness preamble discloses the age.
 - `/workspace/group/watchlist.json` — Upcoming tracked shows. Check before web research (Step 6).
 
 Filter out kids' content: animated children's shows, preschool series, toy-brand cartoons.
