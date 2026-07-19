@@ -34,10 +34,9 @@ Load the overlay at the **main or trusted** tier — the cadence skills material
 
 | Variable | Used by | Purpose |
 |----------|---------|---------|
-| `TRAKT_CLIENT_ID` | trakt-watch-history, entertainment-sync | Trakt API client id (not a secret) |
 | `YOUTUBE_API_KEY` | youtube-comment-check | YouTube Data API v3 key |
 
-NanoClaw forwards these into main/trusted containers. Trakt watch-history requests route through the OneCLI gateway, which injects the Trakt OAuth token and handles refresh — no Trakt access/refresh token lives in the container or `.env`. The recommendation skills (`recommend-shows`, `recommend-books`) consume no secrets — they read owner-uploaded CSV/JSON data.
+NanoClaw forwards these into main/trusted containers. Trakt requires no container variable at all: watch-history requests route through the OneCLI gateway, which injects **every** Trakt credential on the wire — the custom-oauth connection injects the OAuth Bearer, and a header-injection secret injects the client id as the `trakt-api-key` header. No Trakt client id or token lives in the container or `.env`. The recommendation skills (`recommend-shows`, `recommend-books`) consume no secrets — they read owner-uploaded CSV/JSON data.
 
 ## Runtime data
 

@@ -9,7 +9,7 @@ Process steps in order. Do not skip ahead.
 
 ## Step 1 — Fetch History
 
-Run the in-container fetch script. It routes Trakt requests through the OneCLI gateway (the gateway injects the token), writes `/workspace/group/trakt-history.json` atomically on success, and prints the same record to stdout:
+Run the in-container fetch script. It routes Trakt requests through the OneCLI gateway (the gateway injects every Trakt credential — OAuth Bearer and the `trakt-api-key` client id — so the container sends only placeholders), writes `/workspace/group/trakt-history.json` atomically on success, and prints the same record to stdout:
 
 ```bash
 python3 /home/node/.claude/skills/tessl__trakt-watch-history/scripts/trakt-watch-history.py

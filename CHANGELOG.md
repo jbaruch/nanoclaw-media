@@ -2,6 +2,10 @@
 
 All notable changes to this plugin are documented here.
 
+### Changed — Trakt api-key is gateway-injected; container holds no Trakt credential (#57)
+
+The `trakt-watch-history` fetch script no longer reads `TRAKT_CLIENT_ID` (or any Trakt credential) from the container environment. The OneCLI gateway now injects **every** Trakt credential on the wire: the custom-oauth connection injects the OAuth Bearer, and a header-injection secret injects the real client id as the `trakt-api-key` header on `api.trakt.tv`. The script sends only placeholders the gateway overwrites (`trakt-api-key: onecli-managed`, `Authorization: Bearer onecli-managed`), so the container carries zero Trakt config — matching the "no container credential" model of the Google-OAuth surfaces. Drops the `TRAKT_CLIENT_ID`-required gate and its test; `README.md` and `.env.example` remove `TRAKT_CLIENT_ID` from the forwarded container variables (Trakt now needs none). Requires the gateway `trakt-api-key` header-injection secret to be live before deploy. Supersedes the 0.1.38 approach that sent `trakt-api-key` from a forwarded `TRAKT_CLIENT_ID`; pairs with the host-side `TRAKT_CLIENT_ID`-forwarding revert in `jbaruch/nanoclaw#819`.
+
 ## 0.1.38 — 2026-07-19
 
 ### Changed — Trakt fetch routes through the OneCLI gateway, in-container (#57)
