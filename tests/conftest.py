@@ -32,10 +32,11 @@ def csv_append(tmp_path, monkeypatch):
 def trakt_watch_history():
     """Load trakt-watch-history/scripts/trakt-watch-history.py.
 
-    The script reads `TRAKT_CLIENT_ID` (the only credential — the OneCLI
-    gateway owns the Trakt token) and `TRAKT_HISTORY_OUT` at `main()`
-    time, so tests use `monkeypatch.setenv(...)` before invoking main();
-    no module-level paths to redirect. Tests patch
+    The script reads NO Trakt credential — the OneCLI gateway owns the
+    client id and OAuth token and injects them on the wire. It reads only
+    `TRAKT_HISTORY_OUT` at `main()` time, so tests use
+    `monkeypatch.setenv(...)` before invoking main(); no module-level
+    paths to redirect. Tests patch
     `urllib.request.urlopen` to drive the `api_get` HTTP / network / JSON
     branches without real requests."""
     return _load(

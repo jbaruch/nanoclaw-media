@@ -3,16 +3,15 @@
 Fetch Trakt.tv watch history through the OneCLI gateway proxy.
 
 Runs in-container. Trakt requests are routed through the container's
-gateway proxy (wired into the container env by nanoclaw core); the
-gateway owns Trakt OAuth — it injects the real Bearer token and handles
-refresh. The caller sends only:
-  - trakt-api-key: <client_id>  (the client_id is NOT a secret)
+gateway proxy; the gateway owns ALL Trakt credentials and injects them
+on the wire. The caller sends only placeholders the gateway overwrites:
+  - trakt-api-key: onecli-managed  (placeholder; the gateway injects the
+    real client id via a header-injection secret)
   - trakt-api-version: 2
   - Authorization: Bearer onecli-managed  (placeholder; the gateway
-    swaps it for the real token)
+    swaps it for the real OAuth token via the custom-oauth connection)
 
-Required environment:
-  TRAKT_CLIENT_ID
+The container holds NO Trakt config — no client id, no tokens.
 
 Optional environment:
   TRAKT_HISTORY_OUT — destination path for the written record
@@ -60,11 +59,15 @@ SCHEMA_VERSION = 1
 # shared owner-data mount; tests point TRAKT_HISTORY_OUT elsewhere.
 DEFAULT_OUTPUT_PATH = "/workspace/group/trakt-history.json"
 
-# Placeholder Authorization the gateway swaps for the real Trakt token.
-# The gateway matches on api.trakt.tv and injects the managed Bearer;
-# sending a placeholder (rather than omitting Authorization) keeps the
-# request shape identical to a normal Trakt call.
+# Placeholders the gateway swaps for the real Trakt credentials. The
+# gateway matches on api.trakt.tv and overwrites both headers (SetHeader
+# semantics): the custom-oauth connection injects the OAuth Bearer, and a
+# header-injection secret injects the real client id as `trakt-api-key`.
+# Sending placeholders (rather than omitting the headers) keeps the
+# request shape identical to a normal Trakt call and keeps every Trakt
+# credential out of the container.
 ONECLI_MANAGED_BEARER = "onecli-managed"
+ONECLI_MANAGED_API_KEY = "onecli-managed"
 
 # Browser-shaped User-Agent. Cloudflare in front of api.trakt.tv flags
 # short custom UAs (`NanoClaw/1.0` was intermittently blocked). A Chrome
@@ -88,11 +91,11 @@ def fail(msg) -> NoReturn:
     sys.exit(1)
 
 
-def _build_headers(client_id: str) -> dict:
+def _build_headers() -> dict:
     return {
         "Content-Type": "application/json",
         "trakt-api-version": "2",
-        "trakt-api-key": client_id,
+        "trakt-api-key": ONECLI_MANAGED_API_KEY,
         "Authorization": f"Bearer {ONECLI_MANAGED_BEARER}",
         "User-Agent": BROWSER_UA,
     }
@@ -214,13 +217,8 @@ def _write_record(out_path: str, result: dict) -> None:
 
 
 def main():
-    client_id = os.environ.get("TRAKT_CLIENT_ID", "")
-
-    if not client_id:
-        fail("TRAKT_CLIENT_ID required")
-
     out_path = os.environ.get("TRAKT_HISTORY_OUT", DEFAULT_OUTPUT_PATH)
-    headers = _build_headers(client_id)
+    headers = _build_headers()
 
     # Watched shows (with play counts)
     watched_shows = api_get("/users/me/watched/shows", headers)

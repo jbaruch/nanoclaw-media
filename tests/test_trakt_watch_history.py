@@ -2,13 +2,14 @@
 
 Locks down the documented contract per `coding-policy: testing-standards`:
 
-  - Reads `TRAKT_CLIENT_ID` from the environment at `main()` time;
-    missing/empty → `{"error": "..."}` to stdout + exit 1
+  - Reads NO Trakt credential from the environment — the gateway owns
+    them all (client id + OAuth token) and injects them on the wire
   - Trakt requests route through the OneCLI gateway proxy: each `api_get`
-    sends `trakt-api-version: 2`, `trakt-api-key: <client_id>`, a browser
-    `User-Agent`, and the placeholder `Authorization: Bearer
-    onecli-managed` the gateway swaps for the real token. No
-    access/refresh token is read or sent
+    sends `trakt-api-version: 2`, the placeholder `trakt-api-key:
+    onecli-managed`, a browser `User-Agent`, and the placeholder
+    `Authorization: Bearer onecli-managed`. The gateway overwrites both
+    placeholders with the real client id and OAuth token; no Trakt
+    credential is read or sent from the container
   - Issues four `api_get` calls in sequence: watched/shows,
     watched/movies, ratings/shows, ratings/movies
   - Episodes-watched per show summed across `seasons[*].episodes`
@@ -43,8 +44,6 @@ import json
 import urllib.error
 from datetime import datetime, timezone
 from email.message import Message
-
-import pytest
 
 _FROZEN_NOW = datetime(2026, 4, 30, 12, 0, 0, tzinfo=timezone.utc)
 
@@ -109,19 +108,16 @@ def _all_endpoints(*, shows=None, movies=None, show_ratings=None, movie_ratings=
     }
 
 
-def _run(module, monkeypatch, capsys, tmp_path, *, env=None, out_path=None):
+def _run(module, monkeypatch, capsys, tmp_path, *, out_path=None):
     monkeypatch.setattr("sys.argv", ["trakt-watch-history.py"])
     monkeypatch.setattr(module, "datetime", _make_frozen_datetime(datetime))
     if out_path is None:
         out_path = tmp_path / "trakt-history.json"
     monkeypatch.setenv("TRAKT_HISTORY_OUT", str(out_path))
-    if env is None:
-        env = {"TRAKT_CLIENT_ID": "cid"}
-    for k in ("TRAKT_CLIENT_ID",):
-        if k in env:
-            monkeypatch.setenv(k, env[k])
-        else:
-            monkeypatch.delenv(k, raising=False)
+    # No Trakt credential in the container env — the gateway injects the
+    # client id and OAuth token on the wire. Clear any inherited value so
+    # the test proves the script needs none.
+    monkeypatch.delenv("TRAKT_CLIENT_ID", raising=False)
     code = 0
     try:
         result = module.main()
@@ -133,27 +129,11 @@ def _run(module, monkeypatch, capsys, tmp_path, *, env=None, out_path=None):
 
 
 # ---------------------------------------------------------------------------
-# Credential gate
+# No credential gate — the container holds no Trakt credential; the
+# gateway injects the client id and OAuth token on the wire. The
+# happy-path and header tests below run with TRAKT_CLIENT_ID unset,
+# proving the script needs none.
 # ---------------------------------------------------------------------------
-
-
-@pytest.mark.parametrize(
-    "env",
-    [
-        {},
-        {"TRAKT_CLIENT_ID": ""},
-    ],
-)
-def test_missing_client_id_exits_1_with_error_json(
-    trakt_watch_history, monkeypatch, capsys, tmp_path, env
-):
-    """TRAKT_CLIENT_ID missing OR empty → `{"error": "..."}` on stdout
-    + exit 1, before any API call. The gateway owns the token, so
-    client_id is the only credential the container needs."""
-    code, out, _, _ = _run(trakt_watch_history, monkeypatch, capsys, tmp_path, env=env)
-    assert code == 1
-    payload = json.loads(out)
-    assert "TRAKT_CLIENT_ID" in payload["error"]
 
 
 # ---------------------------------------------------------------------------
@@ -279,8 +259,9 @@ def test_empty_history_is_a_valid_written_record(
 
 def test_request_carries_gateway_headers(trakt_watch_history, monkeypatch, capsys, tmp_path):
     """Each `api_get` constructs a Request with the gateway-routed Trakt
-    headers: api-version, api-key from the client_id, browser UA, and
-    the placeholder Bearer the gateway swaps. No real token is sent."""
+    headers: api-version, the placeholder api-key the gateway overwrites,
+    browser UA, and the placeholder Bearer the gateway swaps. No real
+    Trakt credential is sent from the container."""
     captured = {}
 
     def _capture(req, timeout=None):
@@ -299,7 +280,10 @@ def test_request_carries_gateway_headers(trakt_watch_history, monkeypatch, capsy
     # the first letter of each word and lower-casing the rest, so the
     # documented `trakt-api-version` arrives back as `Trakt-api-version`.
     assert headers["Trakt-api-version"] == "2"
-    assert headers["Trakt-api-key"] == "cid"
+    # Placeholder api-key — the gateway overwrites it with the real
+    # client id via a header-injection secret. No client id in the
+    # container.
+    assert headers["Trakt-api-key"] == "onecli-managed"
     # Placeholder Bearer — the gateway injects the real token. No
     # access/refresh token ever reaches this header.
     assert headers["Authorization"] == "Bearer onecli-managed"
