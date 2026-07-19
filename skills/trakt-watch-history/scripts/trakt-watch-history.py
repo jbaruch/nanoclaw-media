@@ -59,15 +59,16 @@ SCHEMA_VERSION = 1
 # shared owner-data mount; tests point TRAKT_HISTORY_OUT elsewhere.
 DEFAULT_OUTPUT_PATH = "/workspace/group/trakt-history.json"
 
-# Placeholders the gateway swaps for the real Trakt credentials. The
-# gateway matches on api.trakt.tv and overwrites both headers (SetHeader
-# semantics): the custom-oauth connection injects the OAuth Bearer, and a
+# Single placeholder value the gateway swaps for the real Trakt
+# credentials on BOTH headers. The gateway matches on api.trakt.tv and
+# overwrites each header (SetHeader semantics), keying on host +
+# header-name, not the incoming value — so one placeholder serves both:
+# the custom-oauth connection injects the OAuth Bearer, and a
 # header-injection secret injects the real client id as `trakt-api-key`.
 # Sending placeholders (rather than omitting the headers) keeps the
 # request shape identical to a normal Trakt call and keeps every Trakt
 # credential out of the container.
-ONECLI_MANAGED_BEARER = "onecli-managed"
-ONECLI_MANAGED_API_KEY = "onecli-managed"
+ONECLI_MANAGED_PLACEHOLDER = "onecli-managed"
 
 # Browser-shaped User-Agent. Cloudflare in front of api.trakt.tv flags
 # short custom UAs (`NanoClaw/1.0` was intermittently blocked). A Chrome
@@ -95,8 +96,8 @@ def _build_headers() -> dict:
     return {
         "Content-Type": "application/json",
         "trakt-api-version": "2",
-        "trakt-api-key": ONECLI_MANAGED_API_KEY,
-        "Authorization": f"Bearer {ONECLI_MANAGED_BEARER}",
+        "trakt-api-key": ONECLI_MANAGED_PLACEHOLDER,
+        "Authorization": f"Bearer {ONECLI_MANAGED_PLACEHOLDER}",
         "User-Agent": BROWSER_UA,
     }
 
