@@ -109,10 +109,11 @@ def _all_endpoints(*, shows=None, movies=None, show_ratings=None, movie_ratings=
     }
 
 
-def _run(module, monkeypatch, capsys, tmp_path, *, env=None):
+def _run(module, monkeypatch, capsys, tmp_path, *, env=None, out_path=None):
     monkeypatch.setattr("sys.argv", ["trakt-watch-history.py"])
     monkeypatch.setattr(module, "datetime", _make_frozen_datetime(datetime))
-    out_path = tmp_path / "trakt-history.json"
+    if out_path is None:
+        out_path = tmp_path / "trakt-history.json"
     monkeypatch.setenv("TRAKT_HISTORY_OUT", str(out_path))
     if env is None:
         env = {"TRAKT_CLIENT_ID": "cid"}
@@ -382,6 +383,24 @@ def test_error_does_not_clobber_existing_record(trakt_watch_history, monkeypatch
     assert "error" in json.loads(out)
     # Prior record untouched.
     assert json.loads(out_path.read_text()) == {"schema_version": 1, "shows": ["previous"]}
+
+
+def test_write_failure_surfaces_error_and_leaves_no_temp(
+    trakt_watch_history, monkeypatch, capsys, tmp_path
+):
+    """A fetch that succeeds but cannot persist (destination directory
+    missing) surfaces the write failure via the `{"error": ...}` +
+    exit-1 contract and leaves no stray `.tmp` file behind — the
+    best-effort cleanup fires even though the temp was never created."""
+    _patch_urlopen(monkeypatch, _all_endpoints())
+    missing_dir = tmp_path / "nope"
+    out_path = missing_dir / "trakt-history.json"
+
+    code, out, _, _ = _run(trakt_watch_history, monkeypatch, capsys, tmp_path, out_path=out_path)
+    assert code == 1
+    assert "could not write" in json.loads(out)["error"]
+    # No temp artifact left dangling (directory never created).
+    assert not missing_dir.exists()
 
 
 def test_url_error_with_timeout_reason_message(trakt_watch_history, monkeypatch, capsys, tmp_path):

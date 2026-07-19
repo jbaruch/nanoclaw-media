@@ -184,17 +184,28 @@ def api_get(path: str, headers: dict):
 
 
 def _write_record(out_path: str, result: dict) -> None:
-    """Atomic-write the record: write a sibling temp file, then
+    """Atomic-write the record: write a per-process temp file, then
     os.replace onto the destination (atomic on the same filesystem)
     so a crash mid-write never leaves a truncated trakt-history.json.
-    The destination directory must already exist (the /workspace/group
-    mount in-container); a missing directory surfaces via fail()."""
-    tmp_path = f"{out_path}.tmp"
+    The temp name carries the PID so two concurrent invocations (e.g.
+    entertainment-sync and a manual recommend-shows run) don't clobber
+    each other's in-flight temp before the replace. The destination
+    directory must already exist (the /workspace/group mount
+    in-container); a missing directory surfaces via fail()."""
+    tmp_path = f"{out_path}.{os.getpid()}.tmp"
     try:
         with open(tmp_path, "w") as f:
             json.dump(result, f, indent=2)
         os.replace(tmp_path, out_path)
     except OSError as e:
+        # Best-effort cleanup so a failed write doesn't leave the temp
+        # behind. The unlink is itself wrapped: if the temp was never
+        # created (open failed) or is already gone, that must not mask
+        # the original write failure surfaced by fail() below.
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
         fail(
             f"Fetched Trakt history but could not write {out_path}: "
             f"{type(e).__name__}: {e} — check the destination directory "
@@ -206,8 +217,7 @@ def main():
     client_id = os.environ.get("TRAKT_CLIENT_ID", "")
 
     if not client_id:
-        print(json.dumps({"error": "TRAKT_CLIENT_ID required"}))
-        sys.exit(1)
+        fail("TRAKT_CLIENT_ID required")
 
     out_path = os.environ.get("TRAKT_HISTORY_OUT", DEFAULT_OUTPUT_PATH)
     headers = _build_headers(client_id)
