@@ -9,7 +9,7 @@ Process steps in order. Do not skip ahead.
 
 ## Step 1 — Run audible backup dry-run
 
-Call the `mcp__nanoclaw__audible_backup` MCP tool with `dryRun: true`.
+Call the `mcp__nanoclaw__run_sidecar` MCP tool with `{ name: "audible-backup", flags: ["--dry-run"] }`.
 
 Parse the response. If `new_books` is 0 or `books` array is empty, stop here. For a scheduled or wrapper invocation (weekly cadence, entertainment-sync): finish silently — no message. For a direct user invocation: report "No new Audible purchases".
 
@@ -19,7 +19,7 @@ Otherwise proceed immediately to Step 2.
 
 ## Step 2 — Download new books
 
-If Step 1 found new books, call `mcp__nanoclaw__audible_backup` with `dryRun: false` to download and decrypt them.
+If Step 1 found new books, call `mcp__nanoclaw__run_sidecar` with `{ name: "audible-backup", flags: [] }` to download and decrypt them.
 
 Parse the response. Note which books succeeded (`status: "ok"`) and which failed.
 

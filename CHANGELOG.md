@@ -2,6 +2,10 @@
 
 All notable changes to this plugin are documented here.
 
+### Changed — audible-backup calls the generic `run_sidecar` host tool (`jbaruch/nanoclaw#750`)
+
+The host moved `audible_backup` behind a generic privileged-sidecar runner (`jbaruch/nanoclaw#750`, part of `jbaruch/nanoclaw#741`). Steps 1–2 now call `mcp__nanoclaw__run_sidecar` with `{ name: "audible-backup", flags: [...] }` — `["--dry-run"]` for the preview, `[]` for the download — instead of the removed `mcp__nanoclaw__audible_backup` tool. The response shape is unchanged (`new_books`, `books[]`, per-book `status`), so Steps 3–4 are untouched. Requires the host `#750` deploy (agent-runner rebuild) to land first.
+
 ## 0.1.35 — 2026-07-18
 
 ### Fix — youtube-comment-check cadence cap drops below the weekly cron interval (`jbaruch/nanoclaw#803`)
