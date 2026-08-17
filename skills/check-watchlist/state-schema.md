@@ -43,6 +43,7 @@ Field promises: `notified: false` is the steady state of a tracked-but-unrelease
 ## Migration Policy
 
 - A record **without** `schema_version` is legacy pre-v1: same shape, readable as v1. Absent `last_checked`/`last_verdict` mean "never resolved" and the entry is due. The owner stamps such a record on the first read — including a run with no verdicts to write — and reports `migrated_to_schema_version`; later runs see the stamp and rewrite nothing.
+- Migration upgrades a **valid** older record. A root that is not an object, or carries no `tracking` list, is malformed at every version: every script refuses it with an actionable error and writes nothing. Stamping it would mint a shape the other readers then reject.
 - Exactly two record versions are interpretable: absent (the legacy case above) and the reader's own. Any other value — newer, older, or non-integer — is no usable prior state:
   - `scripts/check-watchlist-precheck.py` (reader, `SUPPORTED_SCHEMA_VERSION`) ignores `last_checked`/`last_verdict` and date-gates alone. That path wakes, never silences
   - `scripts/verify-release.py` (writer, `WATCHLIST_SCHEMA_VERSION`) leaves the file untouched and reports `write_skipped` — it never rewrites the marker, which would downgrade a newer record into a shape nothing understands. Verdicts still return on stdout, but `write_skipped` stops the caller: `SKILL.md` Step 2 delivers nothing and marks nothing, so no alert is sent that the record cannot record

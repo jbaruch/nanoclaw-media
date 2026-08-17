@@ -20,7 +20,7 @@ Both skills used to direct the agent to read `watchlist.json`, find the entry, e
 
 ### Added — `watchlist.json` state contract (#67)
 
-`skills/check-watchlist/state-schema.md` documents the record shape, the `schema_version` rules, and the writer/reader split. `check-watchlist` owns the file: it migrates an unstamped legacy record on read, writes only a record at its own version (reporting `write_skipped` otherwise), and its precheck interprets the backoff stamps at exactly that version, date-gating alone at any other. `recommend-shows` is a non-owner writer — it appends only to a record already at version `1`, stamps `1` on a record it creates, and treats anything else as read-only.
+`skills/check-watchlist/state-schema.md` documents the record shape, the `schema_version` rules, and the writer/reader split. Migration upgrades a valid older record and never legitimizes a broken one: a root without a `tracking` list is refused by every script rather than stamped. `check-watchlist` owns the file: it migrates an unstamped legacy record on read, writes only a record at its own version (reporting `write_skipped` otherwise), and its precheck interprets the backoff stamps at exactly that version, date-gating alone at any other. `recommend-shows` is a non-owner writer — it appends only to a record already at version `1`, stamps `1` on a record it creates, and treats anything else as read-only.
 
 ## 0.1.39 — 2026-07-19
 

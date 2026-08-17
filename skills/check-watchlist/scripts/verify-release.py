@@ -93,9 +93,11 @@ into a shape nothing understands.
 
 Both diagnostics also go to stderr.
 
-On an unreadable/malformed watchlist: `{"error": "..."}` on stdout and
-exit 1, matching the `{"error": ...}` contract the other in-container
-fetch scripts use.
+On an unreadable/malformed watchlist: `{"error": "..."}` on stdout, the
+same diagnostic on stderr, and exit 1 — matching the `{"error": ...}`
+contract the other in-container fetch scripts use. A root without a
+`tracking` list counts as malformed: migration upgrades a valid older
+record, never legitimizes a broken one.
 """
 
 from __future__ import annotations
@@ -550,6 +552,16 @@ def main() -> int:
         return _fail(
             f"{watchlist_path} is not valid JSON: {exc} — repair or "
             f"restore valid JSON at that path, then rerun the verifier"
+        )
+
+    # Migration upgrades a valid older record; it does not legitimize a
+    # malformed one. A root without a `tracking` list is not a v1 record
+    # in any version, and stamping it would mint a shape every reader
+    # then refuses — `append-watchlist.py` included.
+    if not isinstance(payload, dict) or not isinstance(payload.get("tracking"), list):
+        return _fail(
+            f"{watchlist_path} has no `tracking` list — that is not a watchlist record at any "
+            f"version and will not be stamped; restore the list, then rerun the verifier"
         )
 
     entries = _prioritize(_unnotified(payload))

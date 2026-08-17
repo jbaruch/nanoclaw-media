@@ -35,7 +35,10 @@ Locks down the documented contract per `coding-policy: testing-standards`:
     A record at a version this writer does not implement is a
     `write_skipped` instead — the file is left untouched, and the
     caller stops without delivering or marking anything.
-  - An unreadable/malformed watchlist is `{"error": ...}` + exit 1.
+  - An unreadable/malformed watchlist is `{"error": ...}` on stdout, a
+    diagnostic on stderr, and exit 1. A root without a `tracking` list
+    counts as malformed and is never stamped: migration upgrades a valid
+    older record, it does not legitimize a broken one.
 
 Tests freeze `module.datetime` and patch `urllib.request.urlopen`, so
 no test depends on the wall clock or the network.
@@ -825,7 +828,6 @@ def test_main_stamps_a_record_at_its_own_version(
     [
         {"tracking": []},
         {"tracking": [{"title": "Done", "notified": True}]},
-        {},
     ],
 )
 def test_main_migrates_a_legacy_record_it_had_no_verdicts_for(
@@ -938,10 +940,21 @@ def test_main_errors_on_malformed_json(verify_release, monkeypatch, capsys, tmp_
     assert "not valid JSON" in json.loads(out)["error"]
 
 
-def test_main_handles_an_empty_file(verify_release, monkeypatch, capsys, tmp_path):
+@pytest.mark.parametrize(
+    "content", ["", "{}", '{"schema_version": 1}', '{"tracking": {}}', '{"tracking": "nope"}', "[]"]
+)
+def test_main_refuses_a_root_without_a_tracking_list(
+    verify_release, monkeypatch, capsys, tmp_path, content
+):
+    """Migration upgrades a valid older record; stamping a malformed one
+    would mint a shape every reader then refuses — append-watchlist.py
+    included."""
     path = tmp_path / "watchlist.json"
-    path.write_text("", encoding="utf-8")
+    path.write_text(content, encoding="utf-8")
+    before = path.read_text()
     _patch_urlopen(monkeypatch, {})
-    code, out, _ = _run_main(verify_release, monkeypatch, capsys, path)
-    assert code == 0
-    assert json.loads(out)["stats"]["entries"] == 0
+    code, out, err = _run_main(verify_release, monkeypatch, capsys, path)
+    assert code == 1
+    assert "no `tracking` list" in json.loads(out)["error"]
+    assert "no `tracking` list" in err
+    assert path.read_text() == before
