@@ -102,7 +102,7 @@ python3 /home/node/.claude/skills/tessl__check-watchlist/scripts/mark-entry.py \
   --title "<title>" --cancelled
 ```
 
-Do NOT notify Baruch. On a non-zero exit, surface the script's `error` verbatim. If Step 3 classified no title as cancelled, do nothing here.
+Do NOT notify Baruch. On the first non-zero exit, surface the script's `error` verbatim, mark no further titles, and finish the skill there. If Step 3 classified no title as cancelled, do nothing here.
 
 Finish here. Shows that are not out stay silent and untouched beyond the verifier's own `last_checked` stamp.
 
