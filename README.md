@@ -71,3 +71,10 @@ Owner-uploaded files degrade gracefully when absent (ladder-fallback). Intra-clu
 - **V1** — migrated the personal-media skill cluster from `nanoclaw-admin` as a standalone per-chat overlay tile (`jbaruch/nanoclaw-admin#296`). Three cadence skills (`entertainment-sync`, `check-watchlist`, `youtube-comment-check`) materialise `scheduled_tasks` rows in chats that load this overlay; the rest are user-driven.
 
 See [CHANGELOG.md](CHANGELOG.md) for version history.
+
+## Development dependencies
+
+`tessl.json` declares this repo's dev-time plugin dependencies.
+
+- Every `jbaruch/*` dependency floats at `latest` (Runtime-Managed Manifest Carve-Out, `jbaruch/coding-policy: dependency-management`).
+- `finsi/codex-review` is third-party and pins. No dependency scanner covers the tessl ecosystem. Renewal cadence: quarterly — run `tessl outdated` and bump the pin in its own commit.
