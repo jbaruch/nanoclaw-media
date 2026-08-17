@@ -15,8 +15,10 @@ Locks down the documented contract per `coding-policy: testing-standards`:
     other version is refused with the file untouched.
   - Idempotent: re-marking an already-marked entry reports
     `already_marked`, exits 0, and does not rewrite the file.
-  - Every failure exits 1 with an actionable `error` on stdout and
-    leaves the file untouched — exit 1 means the mutation did NOT land,
+  - `--released` must be a canonical `YYYY-MM-DD` date; a free-form
+    string never reaches the record.
+  - Every failure exits 1 with an actionable `error` on stdout, a
+    diagnostic on stderr, and leaves the file untouched — exit 1 means the mutation did NOT land,
     which is what lets the skill stop instead of delivering shows it
     cannot record.
 """

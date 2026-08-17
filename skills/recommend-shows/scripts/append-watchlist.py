@@ -25,7 +25,8 @@ Input
 -----
 A JSON array of candidate shows on stdin:
   [{"title", "platform", "expected", "reason", "added"}, ...]
-`title` is required. `notified` is set to false by this script and is
+Every field is required and must be a non-empty string; `added` is a
+canonical `YYYY-MM-DD`. `notified` is set to false by this script and is
 rejected in the input — delivery state is the owner's to write.
 `expected` accepts the fuzzy formats the precheck parses (`YYYY-MM-DD`,
 `YYYY-Qn`, `YYYY-MM`, `YYYY`); anything else is refused, since an
@@ -46,7 +47,10 @@ Single-line JSON on stdout.
   exit 0: {"added": ["<title>", ...], "skipped_duplicates": [...],
            "created": <bool>, "tracking_count": N, "schema_version": 1}
   exit 1: {"error": "<what failed and what to do about it>"}
-An empty input array is a valid no-op, not an error.
+Every failure also writes its diagnostic to stderr and adds nothing. An
+empty input array is a valid no-op, not an error. A malformed
+`tracking` on an existing record is refused rather than replaced — a
+non-owner writer does not repair another skill's state.
 """
 
 from __future__ import annotations
@@ -65,7 +69,10 @@ DEFAULT_WATCHLIST_PATH = "/workspace/group/watchlist.json"
 # the owner's WATCHLIST_SCHEMA_VERSION.
 WATCHLIST_SCHEMA_VERSION = 1
 
-# Fields carried onto a new entry, in this order.
+# Every v1 field this writer authors, in record order. All are
+# required: a half-populated entry is a shape the readers' contract
+# does not describe, and `expected` in particular drives the release
+# check's wake window.
 ENTRY_FIELDS = ("title", "platform", "expected", "reason", "added")
 
 _WHITESPACE_RE = re.compile(r"\s+")
@@ -80,7 +87,10 @@ def _normalize(text: str) -> str:
 
 
 def _fail(message: str) -> int:
+    """Structured payload on stdout for the skill, actionable diagnostic
+    on stderr for the operator reading `task_run_logs`."""
     print(json.dumps({"error": message}))
+    sys.stderr.write(f"append-watchlist: {message}\n")
     return 1
 
 
@@ -97,6 +107,14 @@ def _valid_expected(value: object) -> bool:
     return True
 
 
+def _valid_added(value: str) -> bool:
+    """`added` is a canonical `YYYY-MM-DD` date in the record contract."""
+    try:
+        return date.fromisoformat(value.strip()).isoformat() == value.strip()
+    except ValueError:
+        return False
+
+
 def _clean_candidates(raw: Any) -> tuple[list[dict], str | None]:
     if not isinstance(raw, list):
         return [], "stdin must carry a JSON array of show objects"
@@ -104,22 +122,29 @@ def _clean_candidates(raw: Any) -> tuple[list[dict], str | None]:
     for index, item in enumerate(raw):
         if not isinstance(item, dict):
             return [], f"entry {index} is not a JSON object"
-        title = item.get("title")
-        if not isinstance(title, str) or not title.strip():
-            return [], f"entry {index} has no usable `title`"
         if "notified" in item:
             return [], (
                 f"entry {index} carries `notified` — delivery state belongs to check-watchlist; "
                 f"drop the field and rerun"
             )
-        expected = item.get("expected")
-        if expected is not None and not _valid_expected(expected):
+        for field in ENTRY_FIELDS:
+            value = item.get(field)
+            if not isinstance(value, str) or not value.strip():
+                return [], (
+                    f"entry {index} has no usable `{field}` — every one of "
+                    f"{', '.join(ENTRY_FIELDS)} is required and must be a non-empty string"
+                )
+        if not _valid_expected(item["expected"]):
             return [], (
-                f"entry {index} has `expected` {expected!r}, which the release precheck cannot "
-                f"anchor — use YYYY-MM-DD, YYYY-Qn, YYYY-MM, or YYYY"
+                f"entry {index} has `expected` {item['expected']!r}, which the release precheck "
+                f"cannot anchor — use YYYY-MM-DD, YYYY-Qn, YYYY-MM, or YYYY"
             )
-        entry = {field: item[field] for field in ENTRY_FIELDS if field in item}
-        entry["title"] = title.strip()
+        if not _valid_added(item["added"]):
+            return [], (
+                f"entry {index} has `added` {item['added']!r} — use the canonical YYYY-MM-DD "
+                f"date the entry was tracked on"
+            )
+        entry = {field: item[field].strip() for field in ENTRY_FIELDS}
         entry["notified"] = False
         candidates.append(entry)
     return candidates, None
@@ -168,7 +193,14 @@ def _load(path: Path) -> tuple[dict | None, bool, str | None]:
             ),
         )
     if not isinstance(payload.get("tracking"), list):
-        payload["tracking"] = []
+        return (
+            None,
+            False,
+            (
+                f"{path} has no usable `tracking` list — a non-owner writer does not repair "
+                f"another skill's state; restore the list, then rerun"
+            ),
+        )
     return payload, False, None
 
 

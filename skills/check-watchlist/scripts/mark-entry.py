@@ -58,6 +58,7 @@ import json
 import os
 import re
 import sys
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -75,7 +76,10 @@ def _normalize(text: str) -> str:
 
 
 def _fail(message: str) -> int:
+    """Structured payload on stdout for the skill, actionable diagnostic
+    on stderr for the operator reading `task_run_logs`."""
     print(json.dumps({"error": message}))
+    sys.stderr.write(f"mark-entry: {message}\n")
     return 1
 
 
@@ -115,6 +119,21 @@ def _version_error(payload: dict, path: Path) -> str | None:
         f"this skill does not implement that shape and will not write to it; "
         f"upgrade the skill or restore a version {WATCHLIST_SCHEMA_VERSION} record"
     )
+
+
+def _released_error(value: str) -> str | None:
+    """`released` is a `YYYY-MM-DD` date in the record contract, so a
+    free-form string never reaches the file."""
+    try:
+        parsed = date.fromisoformat(value)
+    except ValueError:
+        return (
+            f"--released {value!r} is not a YYYY-MM-DD date — pass the verifier's "
+            f"`premiere_date`, or today's UTC date when it is absent"
+        )
+    if parsed.isoformat() != value:
+        return f"--released {value!r} is not canonical YYYY-MM-DD — pass {parsed.isoformat()!r}"
+    return None
 
 
 def _find(payload: dict, title: str, path: Path) -> tuple[dict | None, str | None]:
@@ -194,6 +213,11 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(sys.argv[1:] if argv is None else argv)
     path = Path(os.environ.get("CHECK_WATCHLIST_PATH", DEFAULT_WATCHLIST_PATH))
+
+    if args.released is not None:
+        released_error = _released_error(args.released)
+        if released_error is not None:
+            return _fail(released_error)
 
     payload, load_error = _load(path)
     if payload is None:

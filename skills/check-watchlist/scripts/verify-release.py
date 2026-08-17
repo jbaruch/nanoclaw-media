@@ -455,6 +455,14 @@ def _unnotified(payload: Any) -> list[dict]:
     return [item for item in tracking if isinstance(item, dict) and item.get("notified") is False]
 
 
+def _fail(message: str) -> int:
+    """Structured payload on stdout for the skill, actionable diagnostic
+    on stderr for the operator reading `task_run_logs`."""
+    print(json.dumps({"error": message}))
+    sys.stderr.write(f"verify-release: {message}\n")
+    return 1
+
+
 def _writable_version(payload: Any) -> bool:
     """Whether this writer may stamp its fields onto the record.
 
@@ -532,27 +540,17 @@ def main() -> int:
     try:
         text = watchlist_path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as exc:
-        print(
-            json.dumps(
-                {
-                    "error": f"cannot read {watchlist_path}: {exc} — restore the file "
-                    f"or fix its read permissions, then rerun the verifier"
-                }
-            )
+        return _fail(
+            f"cannot read {watchlist_path}: {exc} — restore the file "
+            f"or fix its read permissions, then rerun the verifier"
         )
-        return 1
     try:
         payload = json.loads(text) if text.strip() else {}
     except json.JSONDecodeError as exc:
-        print(
-            json.dumps(
-                {
-                    "error": f"{watchlist_path} is not valid JSON: {exc} — repair or "
-                    f"restore valid JSON at that path, then rerun the verifier"
-                }
-            )
+        return _fail(
+            f"{watchlist_path} is not valid JSON: {exc} — repair or "
+            f"restore valid JSON at that path, then rerun the verifier"
         )
-        return 1
 
     entries = _prioritize(_unnotified(payload))
     skipped = max(0, len(entries) - MAX_ENTRIES)

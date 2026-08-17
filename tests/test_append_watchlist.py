@@ -6,17 +6,23 @@ Locks down the documented contract per `coding-policy: testing-standards`:
     valid no-op, not an error.
   - `notified` is written by the script and rejected in the input —
     delivery state belongs to the owner skill.
+  - Every contract field (`title`, `platform`, `expected`, `reason`,
+    `added`) is required and must be a non-empty string; `added` is a
+    canonical `YYYY-MM-DD` date.
   - `expected` must be a format the release precheck can anchor
     (`YYYY-MM-DD`, `YYYY-Qn`, `YYYY-MM`, `YYYY`); anything else is
     refused, since an unanchored window becomes a nightly wake.
+  - A malformed `tracking` on an existing record is read-only: a
+    non-owner writer does not repair another skill's state. Only a
+    record it creates gets an initialized list.
   - Duplicates are detected on the casefolded, whitespace-collapsed
     title and skipped rather than added twice.
   - Version rules for a NON-OWNER writer: create a record stamped
     version 1, append only at version 1, refuse an unstamped or
     otherwise-versioned record with the file untouched. It never
     migrates — that is the owner's job.
-  - Every failure exits 1 with an actionable `error` on stdout and adds
-    nothing.
+  - Every failure exits 1 with an actionable `error` on stdout, a
+    diagnostic on stderr, and adds nothing.
 """
 
 from __future__ import annotations
@@ -202,13 +208,21 @@ def test_an_empty_file_is_treated_as_a_new_record(append_watchlist, monkeypatch,
     assert json.loads(path.read_text())["schema_version"] == SCHEMA
 
 
-def test_a_version_1_record_without_tracking_gets_one(
-    append_watchlist, monkeypatch, capsys, tmp_path
+@pytest.mark.parametrize("tracking", [None, {}, "nope", 7])
+def test_a_malformed_tracking_list_is_read_only(
+    append_watchlist, monkeypatch, capsys, tmp_path, tracking
 ):
-    path = _write(tmp_path, {"schema_version": SCHEMA})
+    """Repairing another skill's malformed state is not a non-owner
+    writer's call — only a record it creates gets an initialized list."""
+    record = {"schema_version": SCHEMA}
+    if tracking is not None:
+        record["tracking"] = tracking
+    path = _write(tmp_path, record)
+    before = path.read_text()
     code, out = _run(append_watchlist, monkeypatch, capsys, path, [_candidate("New Show")])
-    assert code == 0
-    assert out["tracking_count"] == 1
+    assert code == 1
+    assert "no usable `tracking` list" in out["error"]
+    assert path.read_text() == before
 
 
 # ---------------------------------------------------------------------------
@@ -238,7 +252,7 @@ def test_anchorable_expected_values_are_accepted(
 
 
 @pytest.mark.parametrize(
-    "expected", ["TBA", "summer 2026", "2026-13", "2026-1", "2026-13-40", "", "late 2026"]
+    "expected", ["TBA", "summer 2026", "2026-13", "2026-1", "2026-13-40", "late 2026"]
 )
 def test_unanchorable_expected_values_are_refused(
     append_watchlist, monkeypatch, capsys, tmp_path, expected
@@ -254,14 +268,41 @@ def test_unanchorable_expected_values_are_refused(
     assert not path.exists()
 
 
-def test_a_missing_expected_is_allowed(append_watchlist, monkeypatch, capsys, tmp_path):
-    """The precheck treats an absent window as conservatively due, which
-    is safe — only an unparseable value is refused."""
+@pytest.mark.parametrize("field", ["title", "platform", "expected", "reason", "added"])
+def test_every_contract_field_is_required(append_watchlist, monkeypatch, capsys, tmp_path, field):
+    """A half-populated entry is a shape the readers' contract does not
+    describe."""
     path = tmp_path / "watchlist.json"
     candidate = _candidate("New Show")
-    del candidate["expected"]
-    code, _ = _run(append_watchlist, monkeypatch, capsys, path, [candidate])
-    assert code == 0
+    del candidate[field]
+    code, out = _run(append_watchlist, monkeypatch, capsys, path, [candidate])
+    assert code == 1
+    assert f"no usable `{field}`" in out["error"]
+    assert not path.exists()
+
+
+@pytest.mark.parametrize("value", ["", "   ", 2026, None, ["x"], {"a": 1}])
+def test_non_string_or_blank_fields_are_refused(
+    append_watchlist, monkeypatch, capsys, tmp_path, value
+):
+    path = tmp_path / "watchlist.json"
+    code, out = _run(
+        append_watchlist, monkeypatch, capsys, path, [_candidate("New Show", platform=value)]
+    )
+    assert code == 1
+    assert "no usable `platform`" in out["error"]
+    assert not path.exists()
+
+
+@pytest.mark.parametrize("added", ["17-08-2026", "2026-8-17", "2026-13-40", "yesterday"])
+def test_a_malformed_added_date_is_refused(append_watchlist, monkeypatch, capsys, tmp_path, added):
+    path = tmp_path / "watchlist.json"
+    code, out = _run(
+        append_watchlist, monkeypatch, capsys, path, [_candidate("New Show", added=added)]
+    )
+    assert code == 1
+    assert "canonical YYYY-MM-DD" in out["error"]
+    assert not path.exists()
 
 
 @pytest.mark.parametrize("candidates", [[{"platform": "Netflix"}], [{"title": "  "}], ["nope"]])
