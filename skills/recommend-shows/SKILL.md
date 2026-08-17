@@ -128,16 +128,19 @@ For announced-but-not-released shows (or just-announced new seasons) matching ta
   "platform": "Platform",
   "expected": "YYYY-MM-DD, YYYY-Qn, YYYY-MM, or YYYY",
   "reason": "Why it matches Baruch's taste",
-  "added": "YYYY-MM-DD",
-  "notified": false
+  "added": "YYYY-MM-DD"
 }
 ```
 
-Use the most precise `expected` known — it sets both the release-check wake window and how often an unresolved entry is re-asked. Full field contract: `skills/check-watchlist/state-schema.md` (owner: `check-watchlist`).
+Use the most precise `expected` known. Full field contract: `skills/check-watchlist/state-schema.md` (owner: `check-watchlist`).
 
-Read existing watchlist.json first, merge, write back. No duplicates. This skill is a non-owner writer, so it never migrates a record. Handle the root's `schema_version` (currently `1`):
-- **Creating the file** — write `{"schema_version": 1, "tracking": [ ... ]}`.
-- **`1`** — append and preserve it unchanged.
-- **Absent, or any other value** — read-only for this skill. Append nothing, write nothing, and report the version you found. The nightly `check-watchlist` run stamps an unstamped record when it reads one; add the shows on the next run.
+Pass the candidates as a JSON array on stdin; the script owns the merge, the duplicate check, and the record's `schema_version`:
+
+```bash
+echo '[{"title": "...", "platform": "...", "expected": "...", "reason": "...", "added": "YYYY-MM-DD"}]' \
+  | python3 /home/node/.claude/skills/tessl__recommend-shows/scripts/append-watchlist.py
+```
+
+Do not set `notified` — the script writes it. Exit 0 returns `added`, `skipped_duplicates`, and `created`; report nothing for a clean run. On a non-zero exit, surface the script's `error` verbatim and add no shows. Input contract, accepted `expected` formats, and version rules: `skills/recommend-shows/scripts/append-watchlist.py` module docstring.
 
 Finish here — the skill is complete.

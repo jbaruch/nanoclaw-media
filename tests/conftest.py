@@ -45,6 +45,30 @@ def verify_release():
 
 
 @pytest.fixture
+def mark_entry():
+    """Load check-watchlist/scripts/mark-entry.py.
+
+    `main(argv)` takes its arguments as a list, so tests call it
+    directly instead of patching `sys.argv`. The watchlist path comes
+    from `CHECK_WATCHLIST_PATH` at call time — `monkeypatch.setenv(...)`
+    before invoking."""
+    return _load("mark_entry_under_test", "skills/check-watchlist/scripts/mark-entry.py")
+
+
+@pytest.fixture
+def append_watchlist():
+    """Load recommend-shows/scripts/append-watchlist.py.
+
+    Candidates arrive on stdin, so tests patch `sys.stdin` with a
+    StringIO; the destination comes from `CHECK_WATCHLIST_PATH` at
+    `main()` time."""
+    return _load(
+        "append_watchlist_under_test",
+        "skills/recommend-shows/scripts/append-watchlist.py",
+    )
+
+
+@pytest.fixture
 def trakt_watch_history():
     """Load trakt-watch-history/scripts/trakt-watch-history.py.
 
