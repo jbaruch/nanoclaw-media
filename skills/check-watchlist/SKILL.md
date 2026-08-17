@@ -28,12 +28,14 @@ Run the in-container verifier:
 python3 /home/node/.claude/skills/tessl__check-watchlist/scripts/verify-release.py
 ```
 
-It resolves every unnotified entry against a structured source under a hard wall-clock budget, stamps `last_checked`/`last_verdict` on the entries it resolved, and prints one JSON line: `results[]` of `{title, verdict, detail, premiere_date, platform, checked}` plus `stats`. Bounds, source, and matching rule: `skills/check-watchlist/scripts/verify-release.py` module docstring.
+It resolves a bounded batch of unnotified entries against a structured source under a hard wall-clock budget, stamps `last_checked`/`last_verdict` on the entries it resolved, and prints one JSON line: `results[]` of `{title, verdict, detail, premiere_date, platform, checked}` plus `stats`. Bounds, source, and matching rule: `skills/check-watchlist/scripts/verify-release.py` module docstring.
+
+Act only on the entries in `results[]`. A non-zero `stats.skipped_over_cap` counts entries the run did not reach; they carry no verdict and need no action here — they are unstamped, so the next fire leads with them. Do not search for them in Step 3 and do not treat them as not-released.
 
 Per verdict:
 - **`released`** — the show is out on the platform the entry tracks. Carry `premiere_date` and `platform` into Step 4.
 - **`unreleased`** — not out yet. Stay silent; the script already recorded the check.
-- **`unknown`** — unresolved. Goes to Step 3. A `platform_mismatch` detail means the show premiered somewhere the entry doesn't track (an original-country airing ahead of the international drop) — the `premiere_date` and `platform` on that result are the other channel's, never grounds for an alert.
+- **`unknown`** — unresolved. Goes to Step 3. Two details carry a premiere date that is **not** grounds for an alert: `platform_mismatch` (the show premiered on a service the entry doesn't track — an original-country airing ahead of the international drop) and `platform_unverified` (the source names no channel, so nothing corroborates the entry's platform).
 
 On a non-zero exit or an `{"error": ...}` payload, surface the script's stdout/stderr verbatim via `mcp__nanoclaw__send_message` and finish here. A `write_error` field is a warning, not a failure — the verdicts still hold. Continue, and mention it in Step 4's message.
 

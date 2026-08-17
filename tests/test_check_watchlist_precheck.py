@@ -641,13 +641,15 @@ def test_decide_ignores_stamps_on_far_future_entries(precheck, tmp_path):
     assert result["data"]["nearest_window"] == "2027-01-01"
 
 
-@pytest.mark.parametrize("version", [2, 99])
-def test_decide_ignores_backoff_stamps_from_a_newer_schema(precheck, tmp_path, version):
-    """A record stamped newer than this reader supports is no usable
-    prior state (`coding-policy: stateful-artifacts`): the versioned
-    fields go uninterpreted and the entry falls back to date-gating,
-    which wakes. A lagging reader must never suppress an alert on the
-    strength of fields it cannot read."""
+@pytest.mark.parametrize("version", [2, 99, 0, -1])
+def test_decide_ignores_backoff_stamps_from_an_unsupported_schema(precheck, tmp_path, version):
+    """Only the documented legacy case (no stamp) and the supported
+    version qualify — a newer stamp belongs to a writer this reader
+    doesn't know, an older one to a shape it was never written against.
+    Both are no usable prior state (`coding-policy: stateful-artifacts`):
+    the versioned fields go uninterpreted and date-gating decides, which
+    wakes. A reader must never suppress an alert on the strength of
+    fields it cannot interpret."""
     path = _write(
         tmp_path,
         {

@@ -30,10 +30,12 @@ skill falls back to a bounded search for those titles only.
 A premiere date alone does not mean the owner can watch it. TVmaze
 reports the FIRST airing anywhere — Fauda S5 premiered 2026-05-18 on
 Israeli Yes while the watchlist tracks its later Netflix international
-drop, the exact false alert #67's stopgap caught by hand. So a
-`released` verdict is downgraded to `unknown`/`platform_mismatch`
-whenever the entry names a `platform` that the premiere's channel
-doesn't match; the skill's bounded search settles those.
+drop, the exact false alert #67's stopgap caught by hand. A `released`
+verdict is therefore downgraded to `unknown` whenever the entry names a
+`platform` the premiere's channel does not corroborate:
+`platform_mismatch` when the channel is a different service,
+`platform_unverified` when the source names no channel at all. Both
+route to the skill's bounded search rather than to an alert.
 
 Bounds (the point of the script)
 --------------------------------
@@ -71,10 +73,15 @@ Single-line JSON on stdout, exit 0:
                 "platform", "checked"}],
    "stats": {"entries", "resolved", "released", "unreleased",
              "unknown", "skipped_over_cap"},
-   "write_error": "<msg>"}   # only when the write-back failed
-`write_error` is a warning, not a failure: the verdicts are still valid
-and a released show must still be notified, so the run continues and the
-diagnostic also goes to stderr.
+   "write_error": "<msg>",     # only when the write-back failed
+   "write_skipped": "<msg>"}   # only when the record's version is not
+                               # this writer's
+Both are warnings, not failures: the verdicts are still valid and a
+released show must still be notified, so the run continues and each
+diagnostic also goes to stderr. The writer stamps only a record it
+authored — no `schema_version`, or this writer's own; any other value
+belongs to a writer this one does not implement, and rewriting the
+marker would downgrade a newer record into a shape nothing understands.
 
 On an unreadable/malformed watchlist: `{"error": "..."}` on stdout and
 exit 1, matching the `{"error": ...}` contract the other in-container
@@ -148,6 +155,22 @@ _SEASON_RE = re.compile(
 )
 _WHITESPACE_RE = re.compile(r"\s+")
 _NON_ALNUM_RE = re.compile(r"[^a-z0-9]+")
+
+# Platform names are compared as canonical slugs, never by substring —
+# `Max` is a substring of `Cinemax`, and conflating the two would fire a
+# false alert. Stripping non-alphanumerics already reconciles the
+# punctuation variants (`Apple TV+` / `Apple TV`, `Paramount+` /
+# `Paramount`); this table covers the rest, mapping an alias slug to its
+# canonical one. A pair that isn't here simply doesn't match, which
+# routes the entry to the skill's bounded search — the safe direction.
+_PLATFORM_ALIASES = {
+    "amazonprimevideo": "primevideo",
+    "amazonprime": "primevideo",
+    "appletvplus": "appletv",
+    "disneyplus": "disney",
+    "paramountplus": "paramount",
+    "hbomax": "max",
+}
 
 
 class ApiError(Exception):
@@ -235,20 +258,27 @@ def _platform(*candidates: Any) -> str | None:
     return None
 
 
+def _canonical_platform(name: str) -> str:
+    slug = _NON_ALNUM_RE.sub("", name.casefold())
+    return _PLATFORM_ALIASES.get(slug, slug)
+
+
 def _platform_matches(expected: object, resolved: str | None) -> bool:
     """Whether a premiere's channel is the platform the entry tracks.
 
-    Compared on alphanumerics only, containment either way, so the same
-    service written two ways still matches (`Apple TV` / `Apple TV+`,
-    `Prime Video` / `Amazon Prime Video`). Missing on either side means
-    no evidence of a mismatch — the release stands."""
-    if not isinstance(expected, str) or not expected.strip() or not resolved:
+    Canonical-slug equality, never containment. An entry that names no
+    platform has nothing to check and matches. An entry that names one
+    against a premiere with no channel does NOT match: the alert would
+    claim availability on a platform the source says nothing about."""
+    if not isinstance(expected, str) or not expected.strip():
         return True
-    wanted = _NON_ALNUM_RE.sub("", expected.casefold())
-    actual = _NON_ALNUM_RE.sub("", resolved.casefold())
-    if not wanted or not actual:
+    if not resolved or not resolved.strip():
+        return False
+    wanted = _canonical_platform(expected)
+    actual = _canonical_platform(resolved)
+    if not wanted:
         return True
-    return wanted in actual or actual in wanted
+    return wanted == actual
 
 
 def _find_season(seasons: Any, number: int) -> dict[str, Any] | None:
@@ -300,7 +330,10 @@ def _premiere_result(
     owner can watch."""
     verdict = _verdict_for(premiere, today)
     if verdict == VERDICT_RELEASED and not _platform_matches(entry_platform, resolved_platform):
-        detail = "platform_mismatch"
+        # No channel at all is a different diagnosis from the wrong
+        # channel, and the operator reading task_run_logs needs to tell
+        # them apart. Both route to the skill's bounded search.
+        detail = "platform_mismatch" if resolved_platform else "platform_unverified"
         verdict = VERDICT_UNKNOWN
     return _result(
         title,
@@ -412,6 +445,28 @@ def _unnotified(payload: Any) -> list[dict]:
     return [item for item in tracking if isinstance(item, dict) and item.get("notified") is False]
 
 
+def _writable_version(payload: Any) -> bool:
+    """Whether this writer may stamp its fields onto the record.
+
+    The owner writes only the shape it authored: an unstamped record
+    (legacy pre-v1, same shape) or one already at
+    `WATCHLIST_SCHEMA_VERSION`. A record carrying any other version came
+    from a writer this one does not implement — stamping v1 fields onto
+    it and rewriting the marker would silently downgrade a newer record
+    into a shape nothing understands. Leave it untouched; the verdicts
+    still return, so a released show is still notified."""
+    if not isinstance(payload, dict):
+        return False
+    version = payload.get("schema_version")
+    if version is None:
+        return True
+    return (
+        isinstance(version, int)
+        and not isinstance(version, bool)
+        and version == WATCHLIST_SCHEMA_VERSION
+    )
+
+
 def _prioritize(entries: list[dict]) -> list[dict]:
     """Least-recently-resolved first, so the MAX_ENTRIES cap rotates.
 
@@ -503,18 +558,27 @@ def main() -> int:
         },
     }
 
-    if _stamp(entries, results, now_utc.date()):
-        if isinstance(payload, dict):
+    if _writable_version(payload):
+        if _stamp(entries, results, now_utc.date()):
             payload["schema_version"] = WATCHLIST_SCHEMA_VERSION
-        try:
-            _write_watchlist(watchlist_path, payload)
-        except OSError as exc:
-            # The verdicts are still good and a released show must be
-            # notified, so this is a warning rather than a failure —
-            # visible on stderr and on the payload the skill reads.
-            message = f"could not write {watchlist_path}: {type(exc).__name__}: {exc}"
-            sys.stderr.write(f"verify-release: {message}\n")
-            output["write_error"] = message
+            try:
+                _write_watchlist(watchlist_path, payload)
+            except OSError as exc:
+                # The verdicts are still good and a released show must
+                # be notified, so this is a warning rather than a
+                # failure — visible on stderr and on the payload the
+                # skill reads.
+                message = f"could not write {watchlist_path}: {type(exc).__name__}: {exc}"
+                sys.stderr.write(f"verify-release: {message}\n")
+                output["write_error"] = message
+    elif results:
+        found = payload.get("schema_version") if isinstance(payload, dict) else "<non-object root>"
+        message = (
+            f"watchlist schema_version {found!r} is not "
+            f"{WATCHLIST_SCHEMA_VERSION}; leaving {watchlist_path} untouched"
+        )
+        sys.stderr.write(f"verify-release: {message}\n")
+        output["write_skipped"] = message
 
     print(json.dumps(output))
     return 0

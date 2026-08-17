@@ -43,7 +43,9 @@ Field promises: `notified: false` is the steady state of a tracked-but-unrelease
 ## Migration Policy
 
 - A record **without** `schema_version` is legacy pre-v1: same shape, readable as v1. Absent `last_checked`/`last_verdict` mean "never resolved" and the entry is due.
-- A record with a **newer** `schema_version` than the reader accepts means the reader is lagging: treat as no usable prior state — the precheck ignores `last_checked`/`last_verdict` and date-gates alone (wake), never falls to silence. The reader's accepted ceiling is `SUPPORTED_SCHEMA_VERSION` in `scripts/check-watchlist-precheck.py`.
+- Exactly two record versions are interpretable: absent (the legacy case above) and the reader's own. Any other value — newer, older, or non-integer — is no usable prior state:
+  - `scripts/check-watchlist-precheck.py` (reader, `SUPPORTED_SCHEMA_VERSION`) ignores `last_checked`/`last_verdict` and date-gates alone. That path wakes, never silences
+  - `scripts/verify-release.py` (writer, `WATCHLIST_SCHEMA_VERSION`) leaves the file untouched and reports `write_skipped` — it never rewrites the marker, which would downgrade a newer record into a shape nothing understands. Verdicts still return, so a released show is still notified
 - Writer and readers ship in this plugin and deploy together, so a bump is atomic — no cross-pipeline dual-accept window applies.
 - Only the owner skill migrates. `recommend-shows` never rewrites fields it did not author.
-- Any shape change bumps `SCHEMA_VERSION` in `scripts/verify-release.py` and this document in the same change.
+- Any shape change bumps `WATCHLIST_SCHEMA_VERSION` in `scripts/verify-release.py`, `SUPPORTED_SCHEMA_VERSION` in `scripts/check-watchlist-precheck.py`, and this document in the same change.

@@ -12,10 +12,13 @@ Locks down the documented contract per `coding-policy: testing-standards`:
     naming a season verdict on that season's `premiereDate`.
   - A premiere date on or before today is `released`, after today is
     `unreleased`.
-  - A `released` verdict whose channel isn't the platform the entry
-    tracks is downgraded to `unknown`/`platform_mismatch` — TVmaze
-    reports the first airing anywhere, and Fauda S5's Israeli premiere
-    is not the Netflix drop the watchlist is waiting on.
+  - A `released` verdict the entry's `platform` doesn't corroborate is
+    downgraded to `unknown`: `platform_mismatch` for a different service
+    (TVmaze reports the first airing anywhere, and Fauda S5's Israeli
+    premiere is not the Netflix drop the watchlist waits on),
+    `platform_unverified` when the source names no channel at all.
+    Platforms compare as canonical slugs with an explicit alias table,
+    never by substring — `Max` is a substring of `Cinemax`.
   - Lookups that never completed (HTTP error, network error, timeout,
     budget exhaustion) are `unknown` with `checked: False`, so the
     entry stays unstamped and the precheck keeps it due — an outage
@@ -220,7 +223,11 @@ def test_show_premiere_today_is_released(verify_release, monkeypatch):
         verify_release,
         monkeypatch,
         _entry("Black Doves"),
-        {"/search/shows": _search(_show("Black Doves", premiered="2026-08-17"))},
+        {
+            "/search/shows": _search(
+                _show("Black Doves", premiered="2026-08-17", web_channel="Netflix")
+            )
+        },
     )
     assert result["verdict"] == "released"
 
@@ -312,16 +319,60 @@ def test_season_premiere_in_the_future_is_unreleased(verify_release, monkeypatch
     "entry_platform,resolved,matches",
     [
         ("Netflix", "Netflix", True),
-        ("Apple TV+", "Apple TV", True),  # same service, two spellings
+        ("netflix", "  Netflix  ", True),
+        # Same service, two spellings — punctuation strips to one slug.
+        ("Apple TV+", "Apple TV", True),
+        ("Paramount+", "Paramount", True),
+        # Aliases that need the explicit table.
         ("Prime Video", "Amazon Prime Video", True),
+        ("Disney+", "Disney Plus", True),
+        ("HBO Max", "Max", True),
+        # Distinct services that substring-matching used to conflate.
+        ("Max", "Cinemax", False),
+        ("Cinemax", "Max", False),
         ("Netflix", "Yes", False),
-        ("Netflix", None, True),  # nothing to contradict the release
+        # An entry that names a platform against a channel-less premiere
+        # has no corroboration — never an alert.
+        ("Netflix", None, False),
+        ("Netflix", "   ", False),
+        # An entry that names no platform has nothing to check.
         (None, "Yes", True),
         ("", "Yes", True),
+        ("   ", None, True),
     ],
 )
 def test_platform_matches(verify_release, entry_platform, resolved, matches):
     assert verify_release._platform_matches(entry_platform, resolved) is matches
+
+
+def test_a_past_premiere_with_no_channel_is_not_an_alert(verify_release, monkeypatch):
+    """The entry tracks Netflix and the source names no channel at all.
+    Alerting "now available on Netflix" here would be a claim with
+    nothing behind it."""
+    result = _verify_one(
+        verify_release,
+        monkeypatch,
+        _entry("Black Doves", platform="Netflix"),
+        {"/search/shows": _search(_show("Black Doves", premiered="2026-08-01"))},
+    )
+    assert result["verdict"] == "unknown"
+    assert result["detail"] == "platform_unverified"
+    assert result["premiere_date"] == "2026-08-01"
+    assert result["checked"] is True
+
+
+def test_a_past_premiere_releases_when_the_entry_names_no_platform(verify_release, monkeypatch):
+    """Nothing to corroborate means nothing to contradict."""
+    entry = _entry("Black Doves")
+    del entry["platform"]
+    result = _verify_one(
+        verify_release,
+        monkeypatch,
+        entry,
+        {"/search/shows": _search(_show("Black Doves", premiered="2026-08-01"))},
+    )
+    assert result["verdict"] == "released"
+    assert result["detail"] == "show_premiere"
 
 
 def test_first_airing_elsewhere_is_not_a_release(verify_release, monkeypatch):
@@ -455,7 +506,11 @@ def test_per_call_timeout_is_capped(verify_release, monkeypatch):
         verify_release,
         monkeypatch,
         _entry("Black Doves"),
-        {"/search/shows": _search(_show("Black Doves", premiered="2026-01-01"))},
+        {
+            "/search/shows": _search(
+                _show("Black Doves", premiered="2026-01-01", web_channel="Netflix")
+            )
+        },
         record=record,
     )
     assert 0 < record[0][1] <= verify_release.PER_CALL_TIMEOUT_SECONDS
@@ -546,7 +601,12 @@ def test_budget_expiring_mid_run_marks_the_rest(verify_release, monkeypatch):
         verify_release.time, "monotonic", lambda: ticks.pop(0) if len(ticks) > 1 else ticks[0]
     )
     _patch_urlopen(
-        monkeypatch, {"/search/shows": _search(_show("Black Doves", premiered="2026-01-01"))}
+        monkeypatch,
+        {
+            "/search/shows": _search(
+                _show("Black Doves", premiered="2026-01-01", web_channel="Netflix")
+            )
+        },
     )
     results = verify_release.verify(
         [_entry("Black Doves"), _entry("Later")], _TODAY, _API_BASE, 10.0
@@ -699,6 +759,80 @@ def test_capped_runs_rotate_instead_of_starving_the_tail(
     assert first | second == set(titles)
 
 
+@pytest.mark.parametrize("version", [2, 0, -1, "1", 1.5, True])
+def test_main_leaves_a_record_it_did_not_author_untouched(
+    verify_release, monkeypatch, capsys, tmp_path, version
+):
+    """The owner writes only the shape it authored. Stamping v1 fields
+    onto a record at another version — and rewriting the marker to 1 —
+    would silently downgrade it into a shape nothing understands."""
+    path = tmp_path / "watchlist.json"
+    path.write_text(
+        json.dumps({"schema_version": version, "tracking": [_entry("Black Doves")]}),
+        encoding="utf-8",
+    )
+    before = path.read_text()
+    _patch_urlopen(
+        monkeypatch,
+        {
+            "/search/shows": _search(
+                _show("Black Doves", premiered="2026-08-01", web_channel="Netflix")
+            )
+        },
+    )
+    code, out, err = _run_main(verify_release, monkeypatch, capsys, path)
+
+    assert code == 0
+    payload = json.loads(out)
+    # The verdict still comes back — a released show must still notify.
+    assert payload["results"][0]["verdict"] == "released"
+    assert "is not 1" in payload["write_skipped"]
+    assert "is not 1" in err
+    assert path.read_text() == before
+
+
+@pytest.mark.parametrize("version", [None, 1])
+def test_main_stamps_a_record_at_its_own_version(
+    verify_release, monkeypatch, capsys, tmp_path, version
+):
+    record = {"tracking": [_entry("Black Doves")]}
+    if version is not None:
+        record["schema_version"] = version
+    path = tmp_path / "watchlist.json"
+    path.write_text(json.dumps(record), encoding="utf-8")
+    _patch_urlopen(
+        monkeypatch,
+        {
+            "/search/shows": _search(
+                _show("Black Doves", premiered="2026-08-01", web_channel="Netflix")
+            )
+        },
+    )
+    _, out, _ = _run_main(verify_release, monkeypatch, capsys, path)
+
+    assert "write_skipped" not in json.loads(out)
+    written = json.loads(path.read_text())
+    assert written["schema_version"] == 1
+    assert written["tracking"][0]["last_verdict"] == "released"
+
+
+def test_main_does_not_warn_about_version_when_there_is_nothing_to_write(
+    verify_release, monkeypatch, capsys, tmp_path
+):
+    """No unnotified entries means no stamping either way — a version
+    warning there would be noise on every quiet night."""
+    path = tmp_path / "watchlist.json"
+    path.write_text(
+        json.dumps({"schema_version": 2, "tracking": [{"title": "Done", "notified": True}]}),
+        encoding="utf-8",
+    )
+    _patch_urlopen(monkeypatch, {})
+    code, out, err = _run_main(verify_release, monkeypatch, capsys, path)
+    assert code == 0
+    assert "write_skipped" not in json.loads(out)
+    assert err == ""
+
+
 def test_main_warns_but_succeeds_when_the_write_fails(
     verify_release, monkeypatch, capsys, tmp_path
 ):
@@ -710,7 +844,12 @@ def test_main_warns_but_succeeds_when_the_write_fails(
     path = locked / "watchlist.json"
     path.write_text(json.dumps({"tracking": [_entry("Black Doves")]}), encoding="utf-8")
     _patch_urlopen(
-        monkeypatch, {"/search/shows": _search(_show("Black Doves", premiered="2026-08-01"))}
+        monkeypatch,
+        {
+            "/search/shows": _search(
+                _show("Black Doves", premiered="2026-08-01", web_channel="Netflix")
+            )
+        },
     )
     os.chmod(locked, 0o500)
     try:
