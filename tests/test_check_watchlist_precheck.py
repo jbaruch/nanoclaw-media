@@ -16,7 +16,13 @@ Locks down the documented contract:
     an un-parseable `expected` (conservative wake) → wake (release_due)
     with `due_count` and `titles` so the agent's first turn doesn't
     re-read the file.
-  - Fuzzy `expected` parsing: ISO date / `YYYY-Qn` / bare `YYYY`.
+  - Fuzzy `expected` parsing: ISO date / `YYYY-Qn` / `YYYY-MM` / bare
+    `YYYY`.
+  - Recheck backoff (jbaruch/nanoclaw-media#67): an entry a verification
+    run already resolved is re-asked no more often than its `expected`
+    precision warrants, so a coarse window stops waking the agent
+    nightly for a year. A `released` verdict is never suppressed — that
+    alert is still undelivered while `notified` is false.
   - main() always exits 0 with valid JSON on stdout.
 """
 
@@ -73,15 +79,42 @@ def _write(tmp_path, payload) -> Path:
         ("2026-q4", "2026-10-01"),  # lowercase tolerated
         ("  2027  ", "2027-01-01"),  # whitespace tolerated
         ("2027", "2027-01-01"),
+        # YYYY-MM was un-parseable before jbaruch/nanoclaw-media#67 and
+        # fell through to the conservative nightly wake.
+        ("2026-10", "2026-10-01"),
+        ("2026-01", "2026-01-01"),
+        ("2026-12", "2026-12-01"),
     ],
 )
 def test_window_start_parses_fuzzy_formats(precheck, value, expected_iso):
     assert precheck._window_start(value).isoformat() == expected_iso
 
 
-@pytest.mark.parametrize("value", ["TBA", "summer 2026", "", None, 2026, "2026-13-40"])
+@pytest.mark.parametrize(
+    "value", ["TBA", "summer 2026", "", None, 2026, "2026-13-40", "2026-13", "2026-1", "2026-00"]
+)
 def test_window_start_returns_none_for_unparseable(precheck, value):
     assert precheck._window_start(value) is None
+
+
+# ---------------------------------------------------------------------------
+# _recheck_interval() — backoff scales with `expected` precision
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "value,days",
+    [
+        ("2026-06-18", 1),
+        ("2026-10", 7),
+        ("2026-Q4", 14),
+        ("2026", 30),
+        ("TBA", 30),
+        (None, 30),
+    ],
+)
+def test_recheck_interval_scales_with_precision(precheck, value, days):
+    assert precheck._recheck_interval(value).days == days
 
 
 # ---------------------------------------------------------------------------
@@ -362,6 +395,246 @@ def test_decide_no_wake_on_unreadable_directory(precheck, tmp_path):
         assert result["data"]["reason"] == "file_unreadable"
     finally:
         os.chmod(locked_dir, 0o700)
+
+
+# ---------------------------------------------------------------------------
+# decide() — recheck backoff (the jbaruch/nanoclaw-media#67 fix)
+# ---------------------------------------------------------------------------
+
+
+def test_decide_no_wake_when_due_entry_is_inside_backoff(precheck, tmp_path):
+    """A bare year anchors to Jan 1 and stays due all year. Once a run
+    has resolved it, re-asking is rate-limited to the 30-day bare-year
+    interval instead of firing nightly."""
+    path = _write(
+        tmp_path,
+        {
+            "tracking": [
+                {
+                    "title": "Sometime 2026",
+                    "notified": False,
+                    "expected": "2026",
+                    "last_checked": "2026-06-10",
+                    "last_verdict": "unreleased",
+                }
+            ]
+        },
+    )
+    result = precheck.decide(NOW, path)
+    assert result["wake_agent"] is False
+    assert result["data"]["reason"] == "within_recheck_backoff"
+    assert result["data"]["backoff_count"] == 1
+    assert result["data"]["next_recheck"] == "2026-07-10"
+
+
+def test_decide_wakes_once_the_backoff_elapses(precheck, tmp_path):
+    """42 days since the last resolution is past the 30-day bare-year
+    interval — the window is still open, so ask again."""
+    path = _write(
+        tmp_path,
+        {
+            "tracking": [
+                {
+                    "title": "Sometime 2026",
+                    "notified": False,
+                    "expected": "2026",
+                    "last_checked": "2026-05-01",
+                    "last_verdict": "unreleased",
+                }
+            ]
+        },
+    )
+    result = precheck.decide(NOW, path)
+    assert result["wake_agent"] is True
+    assert result["data"]["reason"] == "release_due"
+
+
+def test_decide_rechecks_a_dated_entry_every_fire(precheck, tmp_path):
+    """Day-precision `expected` gets a 1-day interval: yesterday's
+    resolution never suppresses today's fire."""
+    path = _write(
+        tmp_path,
+        {
+            "tracking": [
+                {
+                    "title": "I Will Find You",
+                    "notified": False,
+                    "expected": "2026-06-18",
+                    "last_checked": "2026-06-11",
+                    "last_verdict": "unreleased",
+                }
+            ]
+        },
+    )
+    result = precheck.decide(NOW, path)
+    assert result["wake_agent"] is True
+    assert result["data"]["titles"] == ["I Will Find You"]
+
+
+def test_decide_never_suppresses_a_released_verdict(precheck, tmp_path):
+    """`notified` is still false, so the alert has not been delivered —
+    the backoff must not sit on it."""
+    path = _write(
+        tmp_path,
+        {
+            "tracking": [
+                {
+                    "title": "Out Now",
+                    "notified": False,
+                    "expected": "2026",
+                    "last_checked": "2026-06-11",
+                    "last_verdict": "released",
+                }
+            ]
+        },
+    )
+    result = precheck.decide(NOW, path)
+    assert result["wake_agent"] is True
+    assert result["data"]["titles"] == ["Out Now"]
+
+
+@pytest.mark.parametrize(
+    "entry_extra",
+    [
+        {"last_checked": "2026-06-11"},  # no verdict recorded
+        {"last_checked": "yesterday", "last_verdict": "unreleased"},  # unparseable stamp
+        {"last_checked": 20260611, "last_verdict": "unreleased"},  # wrong type
+        {"last_verdict": "unreleased"},  # verdict without a date
+    ],
+)
+def test_decide_wakes_when_the_stamp_is_unusable(precheck, tmp_path, entry_extra):
+    """Only a complete, parseable stamp suppresses — anything else falls
+    back to the conservative wake."""
+    path = _write(
+        tmp_path,
+        {
+            "tracking": [
+                {"title": "Half Stamped", "notified": False, "expected": "2026", **entry_extra}
+            ]
+        },
+    )
+    result = precheck.decide(NOW, path)
+    assert result["wake_agent"] is True
+    assert result["data"]["reason"] == "release_due"
+
+
+def test_decide_reports_only_unsuppressed_titles(precheck, tmp_path):
+    path = _write(
+        tmp_path,
+        {
+            "tracking": [
+                {
+                    "title": "Backed Off",
+                    "notified": False,
+                    "expected": "2026",
+                    "last_checked": "2026-06-11",
+                    "last_verdict": "unknown",
+                },
+                {"title": "Never Checked", "notified": False, "expected": "2026"},
+            ]
+        },
+    )
+    result = precheck.decide(NOW, path)
+    assert result["wake_agent"] is True
+    assert result["data"]["due_count"] == 1
+    assert result["data"]["titles"] == ["Never Checked"]
+
+
+def test_decide_no_wake_on_the_issue_67_nightly_loop(precheck, tmp_path):
+    """The #67 repro: the four entries that flagged `release_due` every
+    single night. The three bare years anchor to Jan 1 and stay in the
+    window all year — they are now held by the backoff after last
+    night's run resolved them. `Fauda S5`'s `2026-10` used to be
+    un-parseable (conservative wake); it now parses and date-gates out
+    on the window alone, before the backoff is consulted."""
+    path = _write(
+        tmp_path,
+        {
+            "tracking": [
+                {
+                    "title": "Black Doves S2",
+                    "notified": False,
+                    "expected": "2026",
+                    "last_checked": "2026-06-11",
+                    "last_verdict": "unreleased",
+                },
+                {
+                    "title": "Severance S3",
+                    "notified": False,
+                    "expected": "2026",
+                    "last_checked": "2026-06-11",
+                    "last_verdict": "unreleased",
+                },
+                {
+                    "title": "Presumed Innocent S2",
+                    "notified": False,
+                    "expected": "2026",
+                    "last_checked": "2026-06-11",
+                    "last_verdict": "unknown",
+                },
+                {
+                    "title": "Fauda S5",
+                    "notified": False,
+                    "expected": "2026-10",
+                    "last_checked": "2026-06-11",
+                    "last_verdict": "unreleased",
+                },
+            ]
+        },
+    )
+    result = precheck.decide(NOW, path)
+    assert result["wake_agent"] is False
+    assert result["data"]["unnotified_count"] == 4
+    assert result["data"]["reason"] == "within_recheck_backoff"
+    assert result["data"]["backoff_count"] == 3
+    assert result["data"]["next_recheck"] == "2026-07-11"
+    assert result["data"]["nearest_window"] == "2026-10-01"
+
+
+def test_decide_reports_both_backoff_and_future_windows(precheck, tmp_path):
+    path = _write(
+        tmp_path,
+        {
+            "tracking": [
+                {
+                    "title": "Backed Off",
+                    "notified": False,
+                    "expected": "2026",
+                    "last_checked": "2026-06-11",
+                    "last_verdict": "unreleased",
+                },
+                {"title": "Far Future", "notified": False, "expected": "2027"},
+            ]
+        },
+    )
+    result = precheck.decide(NOW, path)
+    assert result["wake_agent"] is False
+    assert result["data"]["reason"] == "within_recheck_backoff"
+    assert result["data"]["next_recheck"] == "2026-07-11"
+    assert result["data"]["nearest_window"] == "2027-01-01"
+
+
+def test_decide_ignores_stamps_on_far_future_entries(precheck, tmp_path):
+    """A window beyond the lead is filtered before the backoff ever
+    applies — the reason stays `all_future`."""
+    path = _write(
+        tmp_path,
+        {
+            "tracking": [
+                {
+                    "title": "Far Future",
+                    "notified": False,
+                    "expected": "2027",
+                    "last_checked": "2026-06-11",
+                    "last_verdict": "unreleased",
+                }
+            ]
+        },
+    )
+    result = precheck.decide(NOW, path)
+    assert result["wake_agent"] is False
+    assert result["data"]["reason"] == "all_future"
+    assert result["data"]["nearest_window"] == "2027-01-01"
 
 
 # ---------------------------------------------------------------------------
