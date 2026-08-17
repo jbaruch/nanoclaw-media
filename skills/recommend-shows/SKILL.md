@@ -126,13 +126,19 @@ For announced-but-not-released shows (or just-announced new seasons) matching ta
 {
   "title": "Show Name",
   "platform": "Platform",
-  "expected": "YYYY or YYYY-QN",
+  "expected": "YYYY-MM-DD, YYYY-Qn, YYYY-MM, or YYYY",
   "reason": "Why it matches Baruch's taste",
   "added": "YYYY-MM-DD",
   "notified": false
 }
 ```
 
-Read existing watchlist.json first, merge, write back. No duplicates.
+Use the most precise `expected` known — it sets both the release-check wake window and how often an unresolved entry is re-asked. Full field contract: `skills/check-watchlist/state-schema.md` (owner: `check-watchlist`).
+
+Read existing watchlist.json first, merge, write back. No duplicates. Handle the record's `schema_version` (currently `1`):
+- **Absent** — legacy pre-v1, same shape. Append, and stamp `"schema_version": 1` on the root as you write.
+- **`1`** — append and preserve it unchanged.
+- **Creating the file** — write `{"schema_version": 1, "tracking": [ ... ]}`.
+- **Any other value** — a shape this skill cannot interpret. Write nothing, append nothing, and report the version you found. Never rewrite the marker; never migrate — that is the owner skill's job.
 
 Finish here — the skill is complete.

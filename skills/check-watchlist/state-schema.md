@@ -38,7 +38,7 @@ Field promises: `notified: false` is the steady state of a tracked-but-unrelease
 | `check-watchlist` (`scripts/verify-release.py`) | writer + owner | Atomic-writes `last_checked` + `last_verdict` for every entry it resolved, before the agent composes anything. Leaves every other field untouched |
 | `check-watchlist` (SKILL.md Steps 4–5) | writer + owner | Sets `notified: true` plus `released` or `cancelled`, one entry at a time, writing the whole file back after each. On a failed send it sets neither and deletes that entry's `last_checked`/`last_verdict`, so the backoff cannot suppress the retry of an undelivered alert |
 | `check-watchlist` (`scripts/check-watchlist-precheck.py`) | reader | Reads `notified`, `expected`, `last_checked`, `last_verdict`; never writes. Tolerates a missing file, a missing `tracking`, and entries missing any optional field |
-| `recommend-shows` (Step 9 writer, Step 6 reader) | writer | Appends new `tracking` entries (`title`, `platform`, `expected`, `reason`, `added`, `notified: false`); never migrates, never rewrites another skill's fields |
+| `recommend-shows` (Step 9 writer, Step 6 reader) | writer | Appends new `tracking` entries (`title`, `platform`, `expected`, `reason`, `added`, `notified: false`) to a record at version `1` or unstamped, stamping `1` on a record it creates or on a legacy one it appends to. Writes nothing at any other version. Never migrates, never rewrites another skill's fields |
 
 ## Migration Policy
 
