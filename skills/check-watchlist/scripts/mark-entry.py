@@ -160,24 +160,30 @@ def _read_request(input_path: Path) -> tuple[dict | None, str | None]:
                 f"--input {input_path} has action `released` but no `released` date — "
                 f"pass the verifier's `premiere_date`, or today's UTC date when it is absent"
             )
-        released_error = _released_error(released)
+        released_error = _released_error(released, input_path)
         if released_error is not None:
             return None, released_error
     return request, None
 
 
-def _released_error(value: str) -> str | None:
+def _released_error(value: str, input_path: Path) -> str | None:
     """`released` is a `YYYY-MM-DD` date in the record contract, so a
-    free-form string never reaches the file."""
+    free-form string never reaches the file. The message names the
+    request field the caller has to edit, not a flag: `released` arrives
+    inside the `--input` file."""
     try:
         parsed = date.fromisoformat(value)
     except ValueError:
         return (
-            f"--released {value!r} is not a YYYY-MM-DD date — pass the verifier's "
-            f"`premiere_date`, or today's UTC date when it is absent"
+            f"--input {input_path} has `released` {value!r}, which is not a "
+            f"YYYY-MM-DD date — pass the verifier's `premiere_date`, or today's "
+            f"UTC date when it is absent"
         )
     if parsed.isoformat() != value:
-        return f"--released {value!r} is not canonical YYYY-MM-DD — pass {parsed.isoformat()!r}"
+        return (
+            f"--input {input_path} has `released` {value!r}, which is not canonical "
+            f"YYYY-MM-DD — pass {parsed.isoformat()!r}"
+        )
     return None
 
 

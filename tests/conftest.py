@@ -59,9 +59,9 @@ def mark_entry():
 def append_watchlist():
     """Load recommend-shows/scripts/append-watchlist.py.
 
-    Candidates arrive on stdin, so tests patch `sys.stdin` with a
-    StringIO; the destination comes from `CHECK_WATCHLIST_PATH` at
-    `main()` time."""
+    Candidates arrive in the JSON file named by `--input`, so tests write
+    one to a tmp path and pass it in `argv`; the destination comes from
+    `CHECK_WATCHLIST_PATH` at `main()` time."""
     return _load(
         "append_watchlist_under_test",
         "skills/recommend-shows/scripts/append-watchlist.py",

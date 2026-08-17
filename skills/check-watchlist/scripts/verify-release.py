@@ -487,20 +487,35 @@ def _writable_version(payload: Any) -> bool:
     )
 
 
+def _sort_stamp(entry: dict) -> str:
+    """Sort key for `_prioritize`: the entry's `last_checked` normalized
+    to `YYYY-MM-DD`, or `""` when it does not parse as a date.
+
+    `_stamp` only ever writes `date.isoformat()`, but a hand-edited
+    record can carry anything. A non-date string like `"yesterday"`
+    compares greater than every real stamp, so sorting it as-is would
+    park that entry permanently behind the MAX_ENTRIES cap and it would
+    never be resolved again. An unusable stamp is no stamp. Normalizing
+    keeps a differently-spelled-but-real date (`"20260817"`) ordering
+    against the canonical stamps by its actual date."""
+    value = entry.get("last_checked")
+    if not isinstance(value, str):
+        return ""
+    try:
+        return date.fromisoformat(value).isoformat()
+    except ValueError:
+        return ""
+
+
 def _prioritize(entries: list[dict]) -> list[dict]:
     """Least-recently-resolved first, so the MAX_ENTRIES cap rotates.
 
-    An entry with no `last_checked` sorts first — never resolved beats
-    resolved-a-month-ago. The sort is stable, so entries stamped on the
-    same date keep their watchlist order. Without this a capped
+    An entry with no usable `last_checked` sorts first — never resolved
+    beats resolved-a-month-ago. The sort is stable, so entries stamped on
+    the same date keep their watchlist order. Without this a capped
     watchlist would re-resolve the same leading 12 every run and the
     tail would never be verified at all."""
-    return sorted(
-        entries,
-        key=lambda entry: (
-            entry["last_checked"] if isinstance(entry.get("last_checked"), str) else ""
-        ),
-    )
+    return sorted(entries, key=_sort_stamp)
 
 
 def _stamp(entries: list[dict], results: list[dict], today: date) -> bool:

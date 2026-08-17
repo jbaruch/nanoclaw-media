@@ -749,6 +749,46 @@ def test_prioritize_puts_the_least_recently_resolved_first(verify_release):
     assert order == ["Never Checked", "Bad Stamp", "Checked Last Month", "Checked Today"]
 
 
+def test_prioritize_treats_an_unparseable_stamp_as_never_resolved(verify_release):
+    """A hand-edited `"yesterday"` compares greater than every real ISO
+    stamp, so ordering it as text would park the entry permanently behind
+    the cap."""
+    entries = [
+        _entry("Checked Today", last_checked=_TODAY.isoformat()),
+        _entry("Word Stamp", last_checked="yesterday"),
+        _entry("Empty Stamp", last_checked=""),
+        _entry("Checked Last Month", last_checked="2026-07-01"),
+    ]
+    order = [e["title"] for e in verify_release._prioritize(entries)]
+    assert order == ["Word Stamp", "Empty Stamp", "Checked Last Month", "Checked Today"]
+
+
+def test_prioritize_orders_a_non_canonical_stamp_by_its_actual_date(verify_release):
+    """A real date spelled without separators sorts by the date it means.
+
+    One compact stamp on each side of a canonical one, because the two
+    wrong answers fail differently and a single compact entry cannot
+    catch both. `"-"` sorts below every digit, so comparing raw text
+    drags both compact stamps behind `2026-08-01`; reading them as
+    unusable sends both to the front instead."""
+    entries = [
+        _entry("Old Compact", last_checked="20260701"),
+        _entry("Never Checked"),
+        _entry("Canonical Mid", last_checked="2026-08-01"),
+        _entry("New Compact", last_checked="20260817"),
+    ]
+    order = [e["title"] for e in verify_release._prioritize(entries)]
+    assert order == ["Never Checked", "Old Compact", "Canonical Mid", "New Compact"]
+
+
+def test_sort_stamp_normalizes_what_it_accepts(verify_release):
+    assert verify_release._sort_stamp({"last_checked": "20260701"}) == "2026-07-01"
+    assert verify_release._sort_stamp({"last_checked": "2026-07-01"}) == "2026-07-01"
+    assert verify_release._sort_stamp({"last_checked": "yesterday"}) == ""
+    assert verify_release._sort_stamp({"last_checked": 20260701}) == ""
+    assert verify_release._sort_stamp({}) == ""
+
+
 def test_capped_runs_rotate_instead_of_starving_the_tail(
     verify_release, monkeypatch, capsys, tmp_path
 ):

@@ -369,6 +369,8 @@ def test_an_unwritable_file_reports_that_nothing_landed(mark_entry, monkeypatch,
         ({"title": "X", "action": "deleted"}, "`action`"),
         ({"title": "X", "action": "released"}, "no `released` date"),
         ({"title": "X", "action": "released", "released": 20260801}, "no `released` date"),
+        ({"title": "X", "action": "released", "released": "yesterday"}, "not a YYYY-MM-DD date"),
+        ({"title": "X", "action": "released", "released": "20260801"}, "not canonical YYYY-MM-DD"),
         ("[]", "must hold a JSON object"),
         ("{not json", "not valid JSON"),
     ],
@@ -382,6 +384,26 @@ def test_a_malformed_request_is_refused(
     assert code == 1
     assert needle in out["error"]
     assert path.read_text() == before
+
+
+def test_a_bad_released_date_names_the_request_file_not_a_flag(
+    mark_entry, monkeypatch, capsys, tmp_path
+):
+    """`released` arrives inside the `--input` file. Naming a `--released`
+    flag sends the caller looking for an argument the script does not
+    accept."""
+    path = _write(tmp_path, {"schema_version": 1, "tracking": [_entry("X")]})
+    code, out = _run(
+        mark_entry,
+        monkeypatch,
+        capsys,
+        path,
+        {"title": "X", "action": "released", "released": "yesterday"},
+    )
+    assert code == 1
+    assert "--released" not in out["error"]
+    assert "--input" in out["error"]
+    assert "`released`" in out["error"]
 
 
 def test_a_missing_request_file_is_refused(mark_entry, monkeypatch, capsys, tmp_path):
