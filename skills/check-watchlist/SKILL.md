@@ -12,7 +12,7 @@ Process steps in order. Do not skip ahead.
 
 Monitors `/workspace/group/watchlist.json` for upcoming shows and notifies when they release.
 
-This skill runs inside a maintenance slot the host reaps after 300s without SDK events. Verification is therefore bounded and in-process: **never spawn a subagent, and never reach the network with `curl`, `fetch_markdown`, or any page fetch** — that is what killed the run mid-verification in `jbaruch/nanoclaw-media#67`, losing the alert and re-arming the same check the next night.
+This skill runs inside a maintenance slot the host reaps after 300s without SDK events. Keep verification bounded and in-process: **never spawn a subagent, and never reach the network with `curl`, `fetch_markdown`, or any page fetch**.
 
 ## Step 1 — Read watchlist
 
@@ -35,7 +35,7 @@ Per verdict:
 - **`unreleased`** — not out yet. Stay silent; the script already recorded the check.
 - **`unknown`** — unresolved. Goes to Step 3. A `platform_mismatch` detail means the show premiered somewhere the entry doesn't track (an original-country airing ahead of the international drop) — the `premiere_date` and `platform` on that result are the other channel's, never grounds for an alert.
 
-On a non-zero exit or an `{"error": ...}` payload, surface the script's stdout/stderr verbatim via `mcp__nanoclaw__send_message` and finish here. A `write_error` field is a warning, not a failure — the verdicts still hold, so continue and mention it in Step 4's message.
+On a non-zero exit or an `{"error": ...}` payload, surface the script's stdout/stderr verbatim via `mcp__nanoclaw__send_message` and finish here. A `write_error` field is a warning, not a failure — the verdicts still hold. Continue, and mention it in Step 4's message.
 
 Proceed immediately to Step 3.
 
@@ -49,13 +49,13 @@ For each `unknown` result, run **one** `WebSearch` call, at most 3 across the wh
 
 Derive the years from the run date in UTC — never hardcode them.
 
-Use `WebSearch` only. Do not open pages, do not spawn a subagent, do not shell out. If the search doesn't clearly show the title is out, treat it as not released and stay silent — a missed night is recoverable, a killed run is not.
+Use `WebSearch` only. Do not open pages, do not spawn a subagent, do not shell out. If the search doesn't clearly show the title is out on the platform the entry tracks, treat it as not released and stay silent.
 
 Proceed immediately to Step 4.
 
 ## Step 4 — Deliver each released show
 
-For each released show, complete all four sub-steps before moving to the next one. Batching the writes to the end is what made a mid-run kill lose everything.
+For each released show, complete all four sub-steps before moving to the next one. Never batch the writes to the end of the run.
 
 1. Compose a short notification message (Telegram HTML format):
    ```
