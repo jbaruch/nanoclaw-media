@@ -2,6 +2,18 @@
 
 All notable changes to this plugin are documented here.
 
+### Fixed — advisory follow-ups from PR #68's review (#68)
+
+The round-17 policy review and Copilot's post-merge pass on #68 raised five advisories; none gated the merge, and all five are cleaned up here rather than left as a record nobody reads.
+
+`mark-entry.py` reported a bad `released` value as `--released <value> is not a YYYY-MM-DD date`. That flag stopped existing when the script moved to `--input <path>` in #68, so the message sent the caller hunting for an argument the script rejects. Both date messages now name the request file and the `released` field inside it, matching the sibling errors around them.
+
+`verify-release.py`'s `_prioritize` sorted `last_checked` as raw text. A stamp the script itself never writes — `"yesterday"` from a hand edit — compares greater than every real ISO date, so that entry sorted last and stayed parked behind the `MAX_ENTRIES` cap forever, which is the starvation the rotation exists to prevent. An unusable stamp now reads as no stamp and leads the batch, and a real date spelled without separators is normalized before comparison instead of sorting after every canonical one.
+
+`tests/conftest.py`'s `append_watchlist` fixture still documented candidates arriving on stdin. They arrive in the `--input` file, and the tests already pass one.
+
+The `write_error` and `Write`-the-candidates directives in the two `SKILL.md` files carried their justification in an em-dash clause, which `coding-policy: context-writing-style` keeps out of always-loaded skill prose. The directives stay; the reasons live here. `write_error` is surfaced immediately because a run with no released shows sends nothing later to carry it. Candidates are written with the `Write` tool because an apostrophe in a title — `It's Always Sunny in Philadelphia` — breaks a quoted shell command on its own, no adversary required. The 0.1.49 entry above described `mark-entry.py` by the `--released` / `--cancelled` / `--clear-stamps` flags the same PR removed; it now names the `action` values that replaced them.
+
 ## 0.1.49 — 2026-08-17
 
 ### Fixed — check-watchlist verification is bounded; the alert and the nightly retry loop are both fixed (#67)
@@ -18,7 +30,7 @@ Follow-on to #2's date gate. `2026-10` matched none of the supported `expected` 
 
 Both skills used to direct the agent to read `watchlist.json`, find the entry, edit fields, and write the file back by hand — the delivery bookkeeping in `check-watchlist` Steps 4–5, the merge and duplicate check in `recommend-shows` Step 9. That is deterministic work with known inputs and outputs, so it moves into two single-purpose scripts per `coding-policy: script-delegation`, and the failure orders that matter become testable instead of prose the agent interprets.
 
-`skills/check-watchlist/scripts/mark-entry.py` applies exactly one mutation to one entry — `--released`, `--cancelled`, or `--clear-stamps` for the failed-send rollback — matching titles by the same normalization `verify-release.py` uses, stamping a legacy record, refusing any other version, and reporting `already_marked` on a repeat so a retried run cannot corrupt bookkeeping. Exit 1 always means the mutation did not land, which is what lets the skill stop instead of delivering shows it cannot record. Both scripts take their input as a JSON file the agent writes rather than as command-line text: a show title is data from the wider web, and `It's Always Sunny` alone would break a quoted invocation. `skills/recommend-shows/scripts/append-watchlist.py` takes candidate shows as a JSON file and owns the merge: it writes `notified` itself and rejects it in the input, refuses an `expected` the precheck cannot anchor, skips duplicates on the normalized title, creates a record stamped version 1, and treats an unstamped or otherwise-versioned record as read-only.
+`skills/check-watchlist/scripts/mark-entry.py` applies exactly one mutation to one entry — the request's `action` is `released`, `cancelled`, or `clear_stamps` for the failed-send rollback — matching titles by the same normalization `verify-release.py` uses, stamping a legacy record, refusing any other version, and reporting `already_marked` on a repeat so a retried run cannot corrupt bookkeeping. Exit 1 always means the mutation did not land, which is what lets the skill stop instead of delivering shows it cannot record. Both scripts take their input as a JSON file the agent writes rather than as command-line text: a show title is data from the wider web, and `It's Always Sunny` alone would break a quoted invocation. `skills/recommend-shows/scripts/append-watchlist.py` takes candidate shows as a JSON file and owns the merge: it writes `notified` itself and rejects it in the input, refuses an `expected` the precheck cannot anchor, skips duplicates on the normalized title, creates a record stamped version 1, and treats an unstamped or otherwise-versioned record as read-only.
 
 ### Added — `watchlist.json` state contract (#67)
 
