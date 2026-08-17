@@ -749,6 +749,31 @@ def test_prioritize_puts_the_least_recently_resolved_first(verify_release):
     assert order == ["Never Checked", "Bad Stamp", "Checked Last Month", "Checked Today"]
 
 
+def test_prioritize_treats_an_unparseable_stamp_as_never_resolved(verify_release):
+    """A hand-edited `"yesterday"` compares greater than every real ISO
+    stamp, so ordering it as text would park the entry permanently behind
+    the cap."""
+    entries = [
+        _entry("Checked Today", last_checked=_TODAY.isoformat()),
+        _entry("Word Stamp", last_checked="yesterday"),
+        _entry("Empty Stamp", last_checked=""),
+        _entry("Checked Last Month", last_checked="2026-07-01"),
+    ]
+    order = [e["title"] for e in verify_release._prioritize(entries)]
+    assert order == ["Word Stamp", "Empty Stamp", "Checked Last Month", "Checked Today"]
+
+
+def test_prioritize_orders_a_non_canonical_stamp_by_its_actual_date(verify_release):
+    """`20260701` is a real date spelled without separators; as raw text
+    it sorts after `2026-08-17`, which would invert the rotation."""
+    entries = [
+        _entry("Checked Today", last_checked=_TODAY.isoformat()),
+        _entry("Compact Stamp", last_checked="20260701"),
+    ]
+    order = [e["title"] for e in verify_release._prioritize(entries)]
+    assert order == ["Compact Stamp", "Checked Today"]
+
+
 def test_capped_runs_rotate_instead_of_starving_the_tail(
     verify_release, monkeypatch, capsys, tmp_path
 ):
