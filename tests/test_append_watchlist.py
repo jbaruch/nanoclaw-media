@@ -18,9 +18,10 @@ Locks down the documented contract per `coding-policy: testing-standards`:
   - Duplicates are detected on the casefolded, whitespace-collapsed
     title and skipped rather than added twice.
   - Version rules for a NON-OWNER writer: create a record stamped
-    version 1, append only at version 1, refuse an unstamped or
-    otherwise-versioned record with the file untouched. It never
-    migrates — that is the owner's job.
+    version 1 only when the file is absent, append only at an integer
+    version 1 (a boolean stamp is not 1, despite `True == 1`), refuse an
+    unstamped, otherwise-versioned, empty, or malformed record with the
+    file untouched. It never migrates — that is the owner's job.
   - Every failure exits 1 with an actionable `error` on stdout, a
     diagnostic on stderr, and adds nothing.
 """
@@ -187,7 +188,7 @@ def test_an_unstamped_record_is_read_only(append_watchlist, monkeypatch, capsys,
     assert path.read_text() == before
 
 
-@pytest.mark.parametrize("version", [2, 0, "1", 1.5])
+@pytest.mark.parametrize("version", [2, 0, -1, "1", 1.5, True])
 def test_an_unsupported_version_is_read_only(
     append_watchlist, monkeypatch, capsys, tmp_path, version
 ):
@@ -199,13 +200,18 @@ def test_an_unsupported_version_is_read_only(
     assert path.read_text() == before
 
 
-def test_an_empty_file_is_treated_as_a_new_record(append_watchlist, monkeypatch, capsys, tmp_path):
+@pytest.mark.parametrize("content", ["", "   \n"])
+def test_an_existing_empty_file_is_refused(
+    append_watchlist, monkeypatch, capsys, tmp_path, content
+):
+    """An empty file is state some writer left behind, not absence.
+    Creating a record over it would overwrite the owner's state."""
     path = tmp_path / "watchlist.json"
-    path.write_text("", encoding="utf-8")
+    path.write_text(content, encoding="utf-8")
     code, out = _run(append_watchlist, monkeypatch, capsys, path, [_candidate("New Show")])
-    assert code == 0
-    assert out["created"] is True
-    assert json.loads(path.read_text())["schema_version"] == SCHEMA
+    assert code == 1
+    assert "exists but is empty" in out["error"]
+    assert path.read_text() == content
 
 
 @pytest.mark.parametrize("tracking", [None, {}, "nope", 7])

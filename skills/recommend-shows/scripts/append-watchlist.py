@@ -11,8 +11,9 @@ this script owns the merge.
 `recommend-shows` is a NON-OWNER writer of watchlist.json (owner:
 `check-watchlist`, contract in skills/check-watchlist/state-schema.md),
 which sets the version rules this script enforces:
-  - No file yet -> create it stamped `WATCHLIST_SCHEMA_VERSION`. A
-    record this script authors is its own, not a migration.
+  - No file at all -> create it stamped `WATCHLIST_SCHEMA_VERSION`. A
+    record this script authors is its own, not a migration. An
+    existing-but-empty file is state, not absence, and is refused.
   - Record already at `WATCHLIST_SCHEMA_VERSION` -> append, preserving
     the stamp.
   - Unstamped (legacy pre-v1) or any other version -> read-only. Append
@@ -167,7 +168,17 @@ def _load(path: Path) -> tuple[dict | None, bool, str | None]:
             ),
         )
     if not text.strip():
-        return {"schema_version": WATCHLIST_SCHEMA_VERSION, "tracking": []}, True, None
+        # An existing-but-empty file is state some writer left behind,
+        # not an absent artifact. Creating a record over it would be
+        # this non-owner writer overwriting the owner's state.
+        return (
+            None,
+            False,
+            (
+                f"{path} exists but is empty — that is not a watchlist record; restore a valid "
+                f"record or remove the file, then rerun"
+            ),
+        )
     try:
         payload = json.loads(text)
     except json.JSONDecodeError as exc:
@@ -181,12 +192,20 @@ def _load(path: Path) -> tuple[dict | None, bool, str | None]:
         )
     if not isinstance(payload, dict):
         return None, False, f"{path} root is not a JSON object — restore a valid watchlist record"
-    if payload.get("schema_version") != WATCHLIST_SCHEMA_VERSION:
+    version = payload.get("schema_version")
+    # `True == 1` in Python, so a bare equality check would accept a
+    # boolean stamp as version 1 and let this non-owner writer edit a
+    # malformed record.
+    if not (
+        isinstance(version, int)
+        and not isinstance(version, bool)
+        and version == WATCHLIST_SCHEMA_VERSION
+    ):
         return (
             None,
             False,
             (
-                f"{path} is at schema_version {payload.get('schema_version')!r}, not "
+                f"{path} is at schema_version {version!r}, not "
                 f"{WATCHLIST_SCHEMA_VERSION} — this skill is a non-owner writer and does "
                 f"not migrate; "
                 f"the next check-watchlist run stamps a legacy record, so rerun after it"

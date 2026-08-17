@@ -43,7 +43,7 @@ On a non-zero exit or an `{"error": ...}` payload, surface the script's stdout/s
 
 A `write_skipped` field means the record is at a `schema_version` this skill cannot write. Surface it verbatim, deliver nothing, mark nothing, and finish here.
 
-A `write_error` field is a warning, not a failure. Continue, and mention it in Step 4's message.
+A `write_error` field is a warning, not a failure. Surface it verbatim via `mcp__nanoclaw__send_message` now, then continue — a run with no released shows sends nothing later to carry it.
 
 An empty `results[]` means nothing needed checking. Finish here.
 
