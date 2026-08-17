@@ -135,10 +135,9 @@ For announced-but-not-released shows (or just-announced new seasons) matching ta
 
 Use the most precise `expected` known — it sets both the release-check wake window and how often an unresolved entry is re-asked. Full field contract: `skills/check-watchlist/state-schema.md` (owner: `check-watchlist`).
 
-Read existing watchlist.json first, merge, write back. No duplicates. Handle the record's `schema_version` (currently `1`):
-- **Absent** — legacy pre-v1, same shape. Append, and stamp `"schema_version": 1` on the root as you write.
-- **`1`** — append and preserve it unchanged.
+Read existing watchlist.json first, merge, write back. No duplicates. This skill is a non-owner writer, so it never migrates a record. Handle the root's `schema_version` (currently `1`):
 - **Creating the file** — write `{"schema_version": 1, "tracking": [ ... ]}`.
-- **Any other value** — a shape this skill cannot interpret. Write nothing, append nothing, and report the version you found. Never rewrite the marker; never migrate — that is the owner skill's job.
+- **`1`** — append and preserve it unchanged.
+- **Absent, or any other value** — read-only for this skill. Append nothing, write nothing, and report the version you found. The nightly `check-watchlist` run stamps an unstamped record when it reads one; add the shows on the next run.
 
 Finish here — the skill is complete.

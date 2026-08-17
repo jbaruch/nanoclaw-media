@@ -37,7 +37,11 @@ Per verdict:
 - **`unreleased`** — not out yet. Stay silent; the script already recorded the check.
 - **`unknown`** — unresolved. Goes to Step 3. Two details carry a premiere date that is **not** grounds for an alert: `platform_mismatch` (the show premiered on a service the entry doesn't track — an original-country airing ahead of the international drop) and `platform_unverified` (the source names no channel, so nothing corroborates the entry's platform).
 
-On a non-zero exit or an `{"error": ...}` payload, surface the script's stdout/stderr verbatim via `mcp__nanoclaw__send_message` and finish here. A `write_error` field is a warning, not a failure — the verdicts still hold. Continue, and mention it in Step 4's message.
+On a non-zero exit or an `{"error": ...}` payload, surface the script's stdout/stderr verbatim via `mcp__nanoclaw__send_message` and finish here.
+
+A `write_skipped` field means the record is at a `schema_version` this skill cannot write. Surface it verbatim and finish here — deliver nothing and mark nothing.
+
+A `write_error` field is a warning, not a failure — the verdicts still hold. Continue, and mention it in Step 4's message.
 
 Proceed immediately to Step 3.
 
