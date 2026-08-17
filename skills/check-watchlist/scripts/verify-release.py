@@ -129,6 +129,12 @@ MAX_ENTRIES = 12
 
 ERROR_PREVIEW_BYTES = 200
 
+# Stand-in for a result whose entry carries no usable `title`. An empty
+# string is indistinguishable from a title the run failed to read, and
+# the skill's Step 3 would spend a search slot on it; the sentinel names
+# the entry as unsearchable in both the payload and the operator's eye.
+UNTITLED = "<untitled entry>"
+
 VERDICT_RELEASED = "released"
 VERDICT_UNRELEASED = "unreleased"
 VERDICT_UNKNOWN = "unknown"
@@ -311,7 +317,7 @@ def verify_entry(entry: dict[str, Any], today: date, base_url: str, deadline: fl
     that fails comes back `unknown` with `checked: False`."""
     title = entry.get("title")
     if not isinstance(title, str) or not title.strip():
-        return _result("", VERDICT_UNKNOWN, "title_missing", checked=True)
+        return _result(UNTITLED, VERDICT_UNKNOWN, "title_missing", checked=True)
     title = title.strip()
     base_title, season_number = _split_season(title)
 
@@ -386,7 +392,7 @@ def verify(entries: list[dict], today: date, base_url: str, deadline: float) -> 
             title = entry.get("title")
             results.append(
                 _result(
-                    title if isinstance(title, str) else "",
+                    title if isinstance(title, str) and title.strip() else UNTITLED,
                     VERDICT_UNKNOWN,
                     "budget_exhausted",
                     checked=False,

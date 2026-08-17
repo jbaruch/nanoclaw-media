@@ -410,12 +410,26 @@ def test_season_without_premiere_date_is_unknown(verify_release, monkeypatch):
     assert result["checked"] is True
 
 
-def test_entry_without_title_is_unknown(verify_release, monkeypatch):
+@pytest.mark.parametrize("entry", [{"notified": False}, {"notified": False, "title": "  "}])
+def test_entry_without_title_is_unknown(verify_release, monkeypatch, entry):
+    """A sentinel, not an empty string: the result has to name itself as
+    unsearchable so Step 3 doesn't spend a search slot on it."""
     _patch_urlopen(monkeypatch, {})
     deadline = verify_release.time.monotonic() + 10
-    result = verify_release.verify_entry({"notified": False}, _TODAY, _API_BASE, deadline)
+    result = verify_release.verify_entry(entry, _TODAY, _API_BASE, deadline)
     assert result["verdict"] == "unknown"
     assert result["detail"] == "title_missing"
+    assert result["title"] == verify_release.UNTITLED
+    assert result["checked"] is True
+
+
+def test_budget_exhausted_entry_without_title_gets_the_sentinel(verify_release, monkeypatch):
+    _patch_urlopen(monkeypatch, {})
+    results = verify_release.verify(
+        [{"notified": False}], _TODAY, _API_BASE, verify_release.time.monotonic() - 1
+    )
+    assert results[0]["title"] == verify_release.UNTITLED
+    assert results[0]["detail"] == "budget_exhausted"
 
 
 def test_search_query_carries_the_season_stripped_title(verify_release, monkeypatch):

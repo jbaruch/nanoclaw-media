@@ -41,7 +41,7 @@ Proceed immediately to Step 3.
 
 ## Step 3 — Resolve unknowns
 
-For each `unknown` result, run **one** `WebSearch` call, at most 3 across the whole run (report any beyond the third as unresolved, do not silently drop them):
+For each `unknown` result, run **one** `WebSearch` call, at most 3 across the whole run (report any beyond the third as unresolved, do not silently drop them). Skip results whose `detail` is `title_missing` — those entries carry no title to search for, and the verifier already recorded them:
 
 ```
 "[title]" release date [current year] [next year] [expected year, if different] streaming
