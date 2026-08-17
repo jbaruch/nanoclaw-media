@@ -2,6 +2,8 @@
 
 All notable changes to this plugin are documented here.
 
+## 0.1.49 — 2026-08-17
+
 ### Fixed — check-watchlist verification is bounded; the alert and the nightly retry loop are both fixed (#67)
 
 `check-watchlist` was force-killed on 2026-08-14 and 2026-08-15 (exit 137, ~448s and ~322s) and delivered no notification either night. SKILL.md Step 2's free-form "do a web search" was satisfied by a spawned `general-purpose` subagent doing `fetch_markdown` + `curl`; the fetches stalled and the 300s host inactivity watchdog reaped the container before Step 3, which is where the alert is sent *and* where `notified` flips — so the same set was re-checked and re-killed nightly.
