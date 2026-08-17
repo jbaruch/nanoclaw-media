@@ -31,19 +31,27 @@ from __future__ import annotations
 import io
 import json
 import os
+from datetime import date
 
 import pytest
 
 SCHEMA = 1
+
+# This script does no date arithmetic — `expected` and `added` are
+# format-validated only. Fixtures are still built from one fixed
+# reference rather than future literals, so nothing here reads as a
+# date against the real clock.
+_REF = date(2026, 8, 17)
+_YEAR = _REF.year
 
 
 def _candidate(title, **extra):
     entry = {
         "title": title,
         "platform": "Netflix",
-        "expected": "2026-Q4",
+        "expected": f"{_YEAR}-Q4",
         "reason": "Matches his taste",
-        "added": "2026-08-17",
+        "added": _REF.isoformat(),
     }
     entry.update(extra)
     return entry
@@ -162,7 +170,7 @@ def test_a_duplicate_against_a_notified_entry_is_still_skipped(
         tmp_path,
         {
             "schema_version": SCHEMA,
-            "tracking": [{"title": "Done", "notified": True, "released": "2026-01-01"}],
+            "tracking": [{"title": "Done", "notified": True, "released": "2024-01-01"}],
         },
     )
     code, out = _run(append_watchlist, monkeypatch, capsys, path, [_candidate("Done")])
@@ -246,7 +254,10 @@ def test_notified_in_the_input_is_rejected(append_watchlist, monkeypatch, capsys
     assert not path.exists()
 
 
-@pytest.mark.parametrize("expected", ["2026-06-18", "2026-Q4", "2026-q1", "2026-10", "2026"])
+@pytest.mark.parametrize(
+    "expected",
+    [_REF.isoformat(), f"{_YEAR}-Q4", f"{_YEAR}-q1", f"{_YEAR}-10", f"{_YEAR}"],
+)
 def test_anchorable_expected_values_are_accepted(
     append_watchlist, monkeypatch, capsys, tmp_path, expected
 ):
@@ -258,7 +269,8 @@ def test_anchorable_expected_values_are_accepted(
 
 
 @pytest.mark.parametrize(
-    "expected", ["TBA", "summer 2026", "2026-13", "2026-1", "2026-13-40", "late 2026"]
+    "expected",
+    ["TBA", "summer", f"{_YEAR}-13", f"{_YEAR}-1", f"{_YEAR}-13-40", f"late {_YEAR}"],
 )
 def test_unanchorable_expected_values_are_refused(
     append_watchlist, monkeypatch, capsys, tmp_path, expected
@@ -300,7 +312,10 @@ def test_non_string_or_blank_fields_are_refused(
     assert not path.exists()
 
 
-@pytest.mark.parametrize("added", ["17-08-2026", "2026-8-17", "2026-13-40", "yesterday"])
+@pytest.mark.parametrize(
+    "added",
+    [f"17-08-{_YEAR}", f"{_YEAR}-8-17", f"{_YEAR}-13-40", "yesterday"],
+)
 def test_a_malformed_added_date_is_refused(append_watchlist, monkeypatch, capsys, tmp_path, added):
     path = tmp_path / "watchlist.json"
     code, out = _run(

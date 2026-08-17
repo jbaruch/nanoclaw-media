@@ -27,8 +27,18 @@ from __future__ import annotations
 
 import json
 import os
+from datetime import date, timedelta
 
 import pytest
+
+# This script reads no clock — dates are pure data it format-validates
+# and stores. Fixtures still come off one fixed reference so no literal
+# reads as a date against the real clock.
+_REF = date(2026, 8, 17)
+
+
+def _before(days: int) -> str:
+    return (_REF - timedelta(days=days)).isoformat()
 
 
 def _entry(title, **extra):
@@ -62,13 +72,13 @@ def test_released_marks_notified_and_date(mark_entry, monkeypatch, capsys, tmp_p
         monkeypatch,
         capsys,
         path,
-        ["--title", "Black Doves", "--released", "2026-08-01"],
+        ["--title", "Black Doves", "--released", _before(16)],
     )
     assert code == 0
     assert out["status"] == "marked"
     written = json.loads(path.read_text())["tracking"][0]
     assert written["notified"] is True
-    assert written["released"] == "2026-08-01"
+    assert written["released"] == _before(16)
 
 
 def test_cancelled_marks_notified_and_flag(mark_entry, monkeypatch, capsys, tmp_path):
@@ -91,7 +101,9 @@ def test_clear_stamps_drops_both_and_keeps_notified_false(
         tmp_path,
         {
             "schema_version": 1,
-            "tracking": [_entry("Black Doves", last_checked="2026-08-17", last_verdict="unknown")],
+            "tracking": [
+                _entry("Black Doves", last_checked=_REF.isoformat(), last_verdict="unknown")
+            ],
         },
     )
     code, out = _run(
@@ -124,7 +136,7 @@ def test_only_the_named_entry_changes(mark_entry, monkeypatch, capsys, tmp_path)
             "tracking": [_entry("First"), _entry("Second"), _entry("Third")],
         },
     )
-    _run(mark_entry, monkeypatch, capsys, path, ["--title", "Second", "--released", "2026-08-01"])
+    _run(mark_entry, monkeypatch, capsys, path, ["--title", "Second", "--released", _before(16)])
     tracking = json.loads(path.read_text())["tracking"]
     assert [e["notified"] for e in tracking] == [False, True, False]
 
@@ -136,7 +148,7 @@ def test_only_the_named_entry_changes(mark_entry, monkeypatch, capsys, tmp_path)
 
 def test_remarking_the_same_release_is_idempotent(mark_entry, monkeypatch, capsys, tmp_path):
     path = _write(tmp_path, {"schema_version": 1, "tracking": [_entry("Black Doves")]})
-    argv = ["--title", "Black Doves", "--released", "2026-08-01"]
+    argv = ["--title", "Black Doves", "--released", _before(16)]
     _run(mark_entry, monkeypatch, capsys, path, argv)
     after_first = path.read_text()
     code, out = _run(mark_entry, monkeypatch, capsys, path, argv)
@@ -162,18 +174,18 @@ def test_a_different_release_date_overwrites(mark_entry, monkeypatch, capsys, tm
         monkeypatch,
         capsys,
         path,
-        ["--title", "Black Doves", "--released", "2026-08-01"],
+        ["--title", "Black Doves", "--released", _before(16)],
     )
     code, out = _run(
         mark_entry,
         monkeypatch,
         capsys,
         path,
-        ["--title", "Black Doves", "--released", "2026-08-02"],
+        ["--title", "Black Doves", "--released", _before(15)],
     )
     assert code == 0
     assert out["status"] == "marked"
-    assert json.loads(path.read_text())["tracking"][0]["released"] == "2026-08-02"
+    assert json.loads(path.read_text())["tracking"][0]["released"] == _before(15)
 
 
 # ---------------------------------------------------------------------------
@@ -228,7 +240,7 @@ def test_a_legacy_record_is_stamped_on_write(mark_entry, monkeypatch, capsys, tm
         monkeypatch,
         capsys,
         path,
-        ["--title", "Black Doves", "--released", "2026-08-01"],
+        ["--title", "Black Doves", "--released", _before(16)],
     )
     assert code == 0
     assert json.loads(path.read_text())["schema_version"] == 1
@@ -245,7 +257,7 @@ def test_an_unsupported_version_is_refused_untouched(
         monkeypatch,
         capsys,
         path,
-        ["--title", "Black Doves", "--released", "2026-08-01"],
+        ["--title", "Black Doves", "--released", _before(16)],
     )
     assert code == 1
     assert "does not implement that shape" in out["error"]
@@ -310,7 +322,7 @@ def test_an_unwritable_file_reports_that_nothing_landed(mark_entry, monkeypatch,
             monkeypatch,
             capsys,
             path,
-            ["--title", "Black Doves", "--released", "2026-08-01"],
+            ["--title", "Black Doves", "--released", _before(16)],
         )
     finally:
         os.chmod(locked, 0o700)
@@ -328,9 +340,9 @@ def test_an_unwritable_file_reports_that_nothing_landed(mark_entry, monkeypatch,
     "argv",
     [
         ["--title", "X"],  # no action
-        ["--released", "2026-08-01"],  # no title
+        ["--released", _before(16)],  # no title
         ["--title", "X", "--cancelled", "--clear-stamps"],  # two actions
-        ["--title", "X", "--released", "2026-08-01", "--cancelled"],
+        ["--title", "X", "--released", _before(16), "--cancelled"],
     ],
 )
 def test_invalid_argument_combinations_are_rejected(mark_entry, argv):

@@ -49,7 +49,7 @@ from __future__ import annotations
 import json
 import os
 import urllib.error
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from email.message import Message
 
 import pytest
@@ -59,6 +59,16 @@ import pytest
 _FROZEN_NOW = datetime(2026, 8, 17, 9, 30, tzinfo=timezone.utc)
 _TODAY = date(2026, 8, 17)
 _API_BASE = "https://tvmaze.test"
+
+
+def _after(days: int) -> str:
+    """A premiere date this many days past the frozen reference.
+
+    Derived rather than written literally so no fixture is a future date
+    against the real clock — the suite's `now` is `_FROZEN_NOW`, and
+    these rot at no point. Fixed PAST literals stay literal, which
+    `coding-policy: testing-standards` permits."""
+    return (_TODAY + timedelta(days=days)).isoformat()
 
 
 def _make_frozen_datetime(real_datetime):
@@ -231,7 +241,7 @@ def test_show_premiere_today_is_released(verify_release, monkeypatch):
         _entry("Black Doves"),
         {
             "/search/shows": _search(
-                _show("Black Doves", premiered="2026-08-17", web_channel="Netflix")
+                _show("Black Doves", premiered=_TODAY.isoformat(), web_channel="Netflix")
             )
         },
     )
@@ -243,10 +253,10 @@ def test_show_premiere_in_the_future_is_unreleased(verify_release, monkeypatch):
         verify_release,
         monkeypatch,
         _entry("Black Doves"),
-        {"/search/shows": _search(_show("Black Doves", premiered="2026-08-18"))},
+        {"/search/shows": _search(_show("Black Doves", premiered=_after(1)))},
     )
     assert result["verdict"] == "unreleased"
-    assert result["premiere_date"] == "2026-08-18"
+    assert result["premiere_date"] == _after(1)
     assert result["checked"] is True
 
 
@@ -312,11 +322,11 @@ def test_season_premiere_in_the_future_is_unreleased(verify_release, monkeypatch
         _entry("MobLand Season 2"),
         {
             "/search/shows": _search(_show("MobLand", show_id=3, web_channel="Paramount+")),
-            "/shows/3/seasons": [{"number": 2, "premiereDate": "2026-11-01"}],
+            "/shows/3/seasons": [{"number": 2, "premiereDate": _after(76)}],
         },
     )
     assert result["verdict"] == "unreleased"
-    assert result["premiere_date"] == "2026-11-01"
+    assert result["premiere_date"] == _after(76)
     # Season carries no channel of its own — falls back to the show's.
     assert result["platform"] == "Paramount+"
 
@@ -415,7 +425,7 @@ def test_platform_gate_does_not_touch_future_premieres(verify_release, monkeypat
         {
             "/search/shows": _search(_show("Fauda", show_id=7)),
             "/shows/7/seasons": [
-                {"number": 5, "premiereDate": "2026-12-01", "network": {"name": "Yes"}}
+                {"number": 5, "premiereDate": _after(106), "network": {"name": "Yes"}}
             ],
         },
     )
@@ -497,7 +507,7 @@ def test_search_query_carries_the_season_stripped_title(verify_release, monkeypa
         _entry("Slow Horses - Season 6"),
         {
             "/search/shows": _search(_show("Slow Horses", show_id=2)),
-            "/shows/2/seasons": [{"number": 6, "premiereDate": "2026-09-10"}],
+            "/shows/2/seasons": [{"number": 6, "premiereDate": _after(24)}],
         },
         record=record,
     )
@@ -639,7 +649,7 @@ def test_main_stamps_only_resolved_entries(verify_release, monkeypatch, capsys, 
     _patch_urlopen(
         monkeypatch,
         {
-            "q=Black+Doves": _search(_show("Black Doves", premiered="2026-08-18")),
+            "q=Black+Doves": _search(_show("Black Doves", premiered=_after(1))),
             "q=Fauda": urllib.error.URLError(TimeoutError("timed out")),
         },
     )
@@ -658,7 +668,7 @@ def test_main_stamps_only_resolved_entries(verify_release, monkeypatch, capsys, 
 
     written = json.loads(path.read_text())
     assert written["schema_version"] == verify_release.WATCHLIST_SCHEMA_VERSION
-    assert written["tracking"][0]["last_checked"] == "2026-08-17"
+    assert written["tracking"][0]["last_checked"] == _TODAY.isoformat()
     assert written["tracking"][0]["last_verdict"] == "unreleased"
     # The timed-out lookup leaves no stamp — an outage must not mute it.
     assert "last_checked" not in written["tracking"][1]
@@ -683,7 +693,7 @@ def test_main_stamps_released_verdict(verify_release, monkeypatch, capsys, tmp_p
     payload = json.loads(out)
     assert payload["schema_version"] == verify_release.OUTPUT_SCHEMA_VERSION
     assert payload["results"][0]["verdict"] == "released"
-    assert payload["checked_at"] == "2026-08-17T09:30:00+00:00"
+    assert payload["checked_at"] == _FROZEN_NOW.isoformat()
     written = json.loads(path.read_text())
     assert written["tracking"][0]["last_verdict"] == "released"
     # `notified` stays the skill's to flip, after the alert lands.
@@ -728,7 +738,7 @@ def test_main_reports_entries_over_the_cap(verify_release, monkeypatch, capsys, 
 
 def test_prioritize_puts_the_least_recently_resolved_first(verify_release):
     entries = [
-        _entry("Checked Today", last_checked="2026-08-17"),
+        _entry("Checked Today", last_checked=_TODAY.isoformat()),
         _entry("Never Checked"),
         _entry("Checked Last Month", last_checked="2026-07-01"),
         _entry("Bad Stamp", last_checked=20260817),
