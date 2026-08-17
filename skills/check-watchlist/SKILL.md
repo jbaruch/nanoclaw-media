@@ -78,16 +78,20 @@ Compose a short notification message (Telegram HTML format):
 [1 sentence why Baruch will like it, from the `reason` field]
 ```
 
-Send it via `mcp__nanoclaw__send_message` (standalone, not a reply — this is a proactive alert), then record the delivery:
+Send it via `mcp__nanoclaw__send_message` (standalone, not a reply — this is a proactive alert), then record the delivery. Write the request with the `Write` tool to `/tmp/check-watchlist-mark.json`, never by interpolating the title into a shell command:
+
+```json
+{"title": "<title>", "action": "released", "released": "<YYYY-MM-DD>"}
+```
 
 ```bash
 python3 /home/node/.claude/skills/tessl__check-watchlist/scripts/mark-entry.py \
-  --title "<title>" --released <YYYY-MM-DD>
+  --input /tmp/check-watchlist-mark.json
 ```
 
 Use the verifier's `premiere_date`, today's UTC date when it is absent. Exit 0 means the mutation landed. Every field the script edits, its matching rule, and its version handling: `skills/check-watchlist/scripts/mark-entry.py` module docstring.
 
-**If the send fails**, run the same script with `--clear-stamps` instead of `--released`, surface the send error verbatim, then continue with the remaining released shows.
+**If the send fails**, rewrite the request with `"action": "clear_stamps"` and no `released`, run the same command, surface the send error verbatim, then continue with the remaining released shows.
 
 **If either script call exits non-zero**, surface its `error` verbatim along with every title already delivered this run. Send no further shows and finish the skill here.
 
@@ -95,11 +99,15 @@ Once every released show is delivered and recorded, proceed immediately to Step 
 
 ## Step 5 — Mark cancelled shows
 
-For each title Step 3 classified as cancelled:
+For each title Step 3 classified as cancelled, write the request to `/tmp/check-watchlist-mark.json` with the `Write` tool and run the script:
+
+```json
+{"title": "<title>", "action": "cancelled"}
+```
 
 ```bash
 python3 /home/node/.claude/skills/tessl__check-watchlist/scripts/mark-entry.py \
-  --title "<title>" --cancelled
+  --input /tmp/check-watchlist-mark.json
 ```
 
 Do NOT notify Baruch. On the first non-zero exit, surface the script's `error` verbatim, mark no further titles, and finish the skill there. If Step 3 classified no title as cancelled, do nothing here.

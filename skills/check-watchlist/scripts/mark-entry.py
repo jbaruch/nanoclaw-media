@@ -9,13 +9,19 @@ script-delegation` puts it in a script, and only here is it testable
 against the failure orders that matter (a send that succeeded with a
 write that did not, and a rollback write that fails in turn).
 
-One invocation performs exactly one mutation on exactly one entry:
+One invocation performs exactly one mutation on exactly one entry.
+The request is a JSON file, never command-line text: a show title is
+data from the wider web, and interpolating it into a shell command
+would let an apostrophe break the invocation and `$(...)` do worse.
+The caller writes the file, then names its path:
 
-  mark-entry.py --title "<title>" --released <YYYY-MM-DD>
+  mark-entry.py --input <path>
+
+  {"title": "<title>", "action": "released", "released": "YYYY-MM-DD"}
       Delivered: `notified: true` + `released: <date>`.
-  mark-entry.py --title "<title>" --cancelled
+  {"title": "<title>", "action": "cancelled"}
       Cancelled before release: `notified: true` + `cancelled: true`.
-  mark-entry.py --title "<title>" --clear-stamps
+  {"title": "<title>", "action": "clear_stamps"}
       A send that failed: drop `last_checked`/`last_verdict` so the
       precheck's backoff cannot suppress the retry of an alert that was
       never delivered. `notified` is left false.
@@ -121,6 +127,45 @@ def _version_error(payload: dict, path: Path) -> str | None:
     )
 
 
+ACTIONS = ("released", "cancelled", "clear_stamps")
+
+
+def _read_request(input_path: Path) -> tuple[dict | None, str | None]:
+    """(request, error). The request carries the title as data, so no
+    show title ever reaches a shell."""
+    try:
+        text = input_path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return None, f"--input {input_path} does not exist — write the request JSON there first"
+    except (OSError, UnicodeDecodeError) as exc:
+        return None, f"cannot read --input {input_path}: {exc} — fix its permissions, then rerun"
+    try:
+        request = json.loads(text)
+    except json.JSONDecodeError as exc:
+        return None, f"--input {input_path} is not valid JSON: {exc}"
+    if not isinstance(request, dict):
+        return None, (f"--input {input_path} must hold a JSON object with `title` and `action`")
+    title = request.get("title")
+    if not isinstance(title, str) or not title.strip():
+        return None, f"--input {input_path} has no usable `title`"
+    action = request.get("action")
+    if action not in ACTIONS:
+        return None, (
+            f"--input {input_path} has `action` {action!r} — use one of {', '.join(ACTIONS)}"
+        )
+    if action == "released":
+        released = request.get("released")
+        if not isinstance(released, str):
+            return None, (
+                f"--input {input_path} has action `released` but no `released` date — "
+                f"pass the verifier's `premiere_date`, or today's UTC date when it is absent"
+            )
+        released_error = _released_error(released)
+        if released_error is not None:
+            return None, released_error
+    return request, None
+
+
 def _released_error(value: str) -> str | None:
     """`released` is a `YYYY-MM-DD` date in the record contract, so a
     free-form string never reaches the file."""
@@ -177,35 +222,33 @@ def _write(path: Path, payload: dict) -> str | None:
     return None
 
 
-def _apply(entry: dict, args: argparse.Namespace) -> tuple[str, bool]:
+def _apply(entry: dict, request: dict) -> tuple[str, bool]:
     """(status, changed)."""
-    if args.clear_stamps:
+    action = request["action"]
+    if action == "clear_stamps":
         had = entry.pop("last_checked", None) is not None
         had = entry.pop("last_verdict", None) is not None or had
         return ("stamps_cleared" if had else "stamps_absent", had)
-    if args.cancelled:
+    if action == "cancelled":
         if entry.get("notified") is True and entry.get("cancelled") is True:
             return "already_marked", False
         entry["notified"] = True
         entry["cancelled"] = True
         return "marked", True
-    if entry.get("notified") is True and entry.get("released") == args.released:
+    if entry.get("notified") is True and entry.get("released") == request["released"]:
         return "already_marked", False
     entry["notified"] = True
-    entry["released"] = args.released
+    entry["released"] = request["released"]
     return "marked", True
 
 
 def _parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--title", required=True, help="exact watchlist title to mutate")
-    action = parser.add_mutually_exclusive_group(required=True)
-    action.add_argument("--released", metavar="YYYY-MM-DD", help="mark delivered on this date")
-    action.add_argument("--cancelled", action="store_true", help="mark cancelled before release")
-    action.add_argument(
-        "--clear-stamps",
-        action="store_true",
-        help="drop last_checked/last_verdict after a failed send",
+    parser.add_argument(
+        "--input",
+        required=True,
+        metavar="PATH",
+        help="JSON file holding {title, action, released?}",
     )
     return parser.parse_args(argv)
 
@@ -214,10 +257,9 @@ def main(argv: list[str] | None = None) -> int:
     args = _parse_args(sys.argv[1:] if argv is None else argv)
     path = Path(os.environ.get("CHECK_WATCHLIST_PATH", DEFAULT_WATCHLIST_PATH))
 
-    if args.released is not None:
-        released_error = _released_error(args.released)
-        if released_error is not None:
-            return _fail(released_error)
+    request, request_error = _read_request(Path(args.input))
+    if request is None:
+        return _fail(request_error or f"cannot read --input {args.input}")
 
     payload, load_error = _load(path)
     if payload is None:
@@ -227,11 +269,12 @@ def main(argv: list[str] | None = None) -> int:
     if version_error is not None:
         return _fail(version_error)
 
-    entry, find_error = _find(payload, args.title, path)
+    title = request["title"]
+    entry, find_error = _find(payload, title, path)
     if entry is None:
-        return _fail(find_error or f"no watchlist entry titled {args.title!r}")
+        return _fail(find_error or f"no watchlist entry titled {title!r}")
 
-    status, changed = _apply(entry, args)
+    status, changed = _apply(entry, request)
     if changed:
         payload["schema_version"] = WATCHLIST_SCHEMA_VERSION
         write_error = _write(path, payload)
@@ -242,7 +285,7 @@ def main(argv: list[str] | None = None) -> int:
         json.dumps(
             {
                 "status": status,
-                "title": args.title,
+                "title": title,
                 "schema_version": WATCHLIST_SCHEMA_VERSION,
             }
         )

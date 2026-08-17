@@ -24,7 +24,13 @@ which sets the version rules this script enforces:
 
 Input
 -----
-A JSON array of candidate shows on stdin:
+A JSON array of candidate shows in the file named by `--input`, never
+shell text: a title carrying an apostrophe (`It's Always Sunny`) would
+break a quoted command line, and `$(...)` would do worse. The caller
+writes the file, then names its path.
+
+  append-watchlist.py --input <path>
+
   [{"title", "platform", "expected", "reason", "added"}, ...]
 Every field is required and must be a non-empty string; `added` is a
 canonical `YYYY-MM-DD`. `notified` is set to false by this script and is
@@ -56,6 +62,7 @@ non-owner writer does not repair another skill's state.
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import re
@@ -118,7 +125,7 @@ def _valid_added(value: str) -> bool:
 
 def _clean_candidates(raw: Any) -> tuple[list[dict], str | None]:
     if not isinstance(raw, list):
-        return [], "stdin must carry a JSON array of show objects"
+        return [], "the input file must carry a JSON array of show objects"
     candidates: list[dict] = []
     for index, item in enumerate(raw):
         if not isinstance(item, dict):
@@ -240,12 +247,33 @@ def _write(path: Path, payload: dict) -> str | None:
     return None
 
 
-def main() -> int:
+def _parse_args(argv: list[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--input",
+        required=True,
+        metavar="PATH",
+        help="JSON file holding the array of candidate shows",
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = _parse_args(sys.argv[1:] if argv is None else argv)
+    input_path = Path(args.input)
     path = Path(os.environ.get("CHECK_WATCHLIST_PATH", DEFAULT_WATCHLIST_PATH))
     try:
-        raw = json.loads(sys.stdin.read() or "[]")
+        text = input_path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return _fail(f"--input {input_path} does not exist — write the candidates JSON there first")
+    except (OSError, UnicodeDecodeError) as exc:
+        return _fail(f"cannot read --input {input_path}: {exc} — fix its permissions, then rerun")
+    try:
+        raw = json.loads(text or "[]")
     except json.JSONDecodeError as exc:
-        return _fail(f"stdin is not valid JSON: {exc} — pass a JSON array of show objects")
+        return _fail(
+            f"--input {input_path} is not valid JSON: {exc} — write a JSON array of show objects"
+        )
 
     candidates, candidate_error = _clean_candidates(raw)
     if candidate_error is not None:

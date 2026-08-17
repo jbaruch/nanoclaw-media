@@ -2,8 +2,10 @@
 
 Locks down the documented contract per `coding-policy: testing-standards`:
 
-  - Candidates arrive as a JSON array on stdin; an empty array is a
-    valid no-op, not an error.
+  - Candidates arrive as a JSON array in the file named by `--input`,
+    never as command-line text: a title carrying an apostrophe or a
+    command substitution is ordinary data. An empty array is a valid
+    no-op, not an error.
   - `notified` is written by the script and rejected in the input —
     delivery state belongs to the owner skill.
   - Every contract field (`title`, `platform`, `expected`, `reason`,
@@ -28,7 +30,6 @@ Locks down the documented contract per `coding-policy: testing-standards`:
 
 from __future__ import annotations
 
-import io
 import json
 import os
 from datetime import date
@@ -57,10 +58,15 @@ def _candidate(title, **extra):
     return entry
 
 
-def _run(module, monkeypatch, capsys, path, candidates):
+def _run(module, monkeypatch, capsys, path, candidates, *, tmp_path=None):
+    """`candidates` is the JSON array the skill writes; a raw string is
+    passed through so malformed-input cases can be exercised."""
     monkeypatch.setenv("CHECK_WATCHLIST_PATH", str(path))
-    monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps(candidates)))
-    code = module.main()
+    input_path = (tmp_path or path.parent) / "candidates.json"
+    input_path.write_text(
+        candidates if isinstance(candidates, str) else json.dumps(candidates), encoding="utf-8"
+    )
+    code = module.main(["--input", str(input_path)])
     captured = capsys.readouterr()
     return code, json.loads(captured.out)
 
@@ -344,13 +350,40 @@ def test_a_non_array_input_is_refused(append_watchlist, monkeypatch, capsys, tmp
     assert "JSON array" in out["error"]
 
 
-def test_malformed_stdin_is_refused(append_watchlist, monkeypatch, capsys, tmp_path):
+def test_a_malformed_input_file_is_refused(append_watchlist, monkeypatch, capsys, tmp_path):
+    code, out = _run(
+        append_watchlist, monkeypatch, capsys, tmp_path / "watchlist.json", "{not json"
+    )
+    assert code == 1
+    assert "is not valid JSON" in out["error"]
+
+
+def test_a_missing_input_file_is_refused(append_watchlist, monkeypatch, capsys, tmp_path):
     monkeypatch.setenv("CHECK_WATCHLIST_PATH", str(tmp_path / "watchlist.json"))
-    monkeypatch.setattr("sys.stdin", io.StringIO("{not json"))
-    code = append_watchlist.main()
+    code = append_watchlist.main(["--input", str(tmp_path / "absent.json")])
     out = json.loads(capsys.readouterr().out)
     assert code == 1
-    assert "stdin is not valid JSON" in out["error"]
+    assert "does not exist" in out["error"]
+
+
+@pytest.mark.parametrize(
+    "title",
+    [
+        "It's Always Sunny in Philadelphia",
+        'The "Quoted" Show',
+        "Show; rm -rf /",
+        "Show $(whoami)",
+        "Show `id`",
+    ],
+)
+def test_shell_hostile_titles_round_trip(append_watchlist, monkeypatch, capsys, tmp_path, title):
+    """The candidates are a JSON file, never command-line text — an
+    apostrophe in a title is ordinary data."""
+    path = tmp_path / "watchlist.json"
+    code, out = _run(append_watchlist, monkeypatch, capsys, path, [_candidate(title)])
+    assert code == 0
+    assert out["added"] == [title]
+    assert json.loads(path.read_text())["tracking"][0]["title"] == title
 
 
 # ---------------------------------------------------------------------------
@@ -367,7 +400,10 @@ def test_an_unwritable_destination_reports_nothing_added(
     path.write_text(json.dumps({"schema_version": SCHEMA, "tracking": []}), encoding="utf-8")
     os.chmod(locked, 0o500)
     try:
-        code, out = _run(append_watchlist, monkeypatch, capsys, path, [_candidate("New Show")])
+        # The input file has to live outside the locked directory.
+        code, out = _run(
+            append_watchlist, monkeypatch, capsys, path, [_candidate("New Show")], tmp_path=tmp_path
+        )
     finally:
         os.chmod(locked, 0o700)
     assert code == 1
