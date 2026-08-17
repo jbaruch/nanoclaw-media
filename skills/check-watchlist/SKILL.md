@@ -74,11 +74,15 @@ For each released show, complete all four sub-steps before moving to the next on
 3. Set `notified: true` and add `"released": "YYYY-MM-DD"` (the verifier's `premiere_date`, today's UTC date when absent)
 4. Read the full watchlist.json, update only that entry, write the complete file back
 
+After sub-step 4 succeeds, repeat all four for the next released show. Reach Step 5 only once every released show has been delivered and written.
+
 **If the send fails:** leave `notified` false, delete that entry's `last_checked` and `last_verdict`, write the file back, surface the send error verbatim, then continue with the remaining released shows.
+
+**If that rollback write also fails:** surface both errors verbatim, naming the entry whose stamps are still on disk. Send no further shows and finish the skill here.
 
 **If the send succeeds but the write fails:** surface the write error verbatim, naming every title already delivered this run and stating that their `notified` flags did not persist, so the next fire may repeat those alerts. Send no further shows and finish the skill here — Step 5's write would fail the same way, and each extra send would add another unrecorded alert.
 
-Otherwise proceed immediately to Step 5.
+Once every released show is done, proceed immediately to Step 5.
 
 ## Step 5 — Mark cancelled shows
 

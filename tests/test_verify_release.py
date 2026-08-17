@@ -32,6 +32,9 @@ Locks down the documented contract per `coding-policy: testing-standards`:
     `stats.skipped_over_cap`), never silently dropped.
   - An unwritable watchlist is a `write_error` warning, not a failure:
     the verdicts still hold and a released show must still be notified.
+    A record at a version this writer does not implement is a
+    `write_skipped` instead — the file is left untouched, and the
+    caller stops without delivering or marking anything.
   - An unreadable/malformed watchlist is `{"error": ...}` + exit 1.
 
 Tests freeze `module.datetime` and patch `urllib.request.urlopen`, so

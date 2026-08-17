@@ -78,12 +78,20 @@ Single-line JSON on stdout, exit 0:
                                # this writer's
    "migrated_to_schema_version": 1}  # only on a legacy record's first
                                      # stamp
-Both are warnings, not failures: the verdicts are still valid and a
-released show must still be notified, so the run continues and each
-diagnostic also goes to stderr. The writer stamps only a record it
-authored — no `schema_version`, or this writer's own; any other value
-belongs to a writer this one does not implement, and rewriting the
-marker would downgrade a newer record into a shape nothing understands.
+The two are not equivalent, and the caller acts on them differently
+(SKILL.md Steps 2 and 4):
+  - `write_error` is a warning. The verdicts are valid and a released
+    show must still be notified, so the caller continues and reports
+    the diagnostic.
+  - `write_skipped` stops the caller. The record is at a version this
+    writer does not implement, so nothing may be delivered or marked —
+    an alert that cannot be recorded repeats on every later fire.
+The writer stamps only a record it authored: no `schema_version`, or
+this writer's own. Any other value belongs to a writer this one does
+not implement, and rewriting the marker would downgrade a newer record
+into a shape nothing understands.
+
+Both diagnostics also go to stderr.
 
 On an unreadable/malformed watchlist: `{"error": "..."}` on stdout and
 exit 1, matching the `{"error": ...}` contract the other in-container
