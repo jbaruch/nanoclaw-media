@@ -58,6 +58,13 @@ no stamp and stay due. A `last_verdict` of `released` is never
 suppressed — that alert has not been delivered while `notified` is still
 false.
 
+This precheck reads `schema_version` `<= SUPPORTED_SCHEMA_VERSION`, an
+absent stamp included (legacy pre-v1, same shape). A record stamped
+newer means this reader is lagging: it has no usable prior state, so it
+ignores every versioned field and date-gates alone. That fallback wakes,
+never silences — a reader too old to read the stamps must not suppress
+an alert on their strength.
+
 When wakes happen, `data` carries `due_count` and `titles` so the
 agent's first turn doesn't re-read the file.
 
@@ -81,6 +88,12 @@ DEFAULT_WATCHLIST_PATH = "/workspace/group/watchlist.json"
 # lands exactly on its announced date, so a week of lead lets the agent
 # catch an early drop without waking for shows still quarters away.
 LEAD = timedelta(days=7)
+
+# Highest watchlist.json `schema_version` whose versioned fields this
+# reader understands (contract:
+# skills/check-watchlist/state-schema.md). An absent stamp is legacy
+# pre-v1 and reads as v1.
+SUPPORTED_SCHEMA_VERSION = 1
 
 _QUARTER_START_MONTH = {1: 1, 2: 4, 3: 7, 4: 10}
 _QUARTER_RE = re.compile(r"(\d{4})-[Qq]([1-4])")
@@ -140,6 +153,22 @@ def _recheck_interval(expected: object) -> timedelta:
     return _RECHECK_INTERVALS[_parse_expected(expected)[0]]
 
 
+def _prior_state_readable(payload: dict) -> bool:
+    """Whether this reader may interpret the record's versioned fields.
+
+    A record stamped newer than `SUPPORTED_SCHEMA_VERSION` belongs to a
+    writer this reader does not know; per stateful-artifacts it is no
+    usable prior state, not something to migrate or guess at."""
+    version = payload.get("schema_version")
+    if version is None:
+        return True
+    return (
+        isinstance(version, int)
+        and not isinstance(version, bool)
+        and version <= SUPPORTED_SCHEMA_VERSION
+    )
+
+
 def _next_recheck(entry: dict, today: date) -> date | None:
     """Date this entry becomes re-askable, or None when it is askable
     now. `released` is never suppressed — while `notified` is false that
@@ -194,6 +223,7 @@ def decide(now_utc: datetime, watchlist_path: Path) -> dict:
 
     today = now_utc.date()
     cutoff = today + LEAD
+    prior_state_readable = _prior_state_readable(payload)
     due_titles: list[str] = []
     due_count = 0
     windows: list[date] = []
@@ -204,7 +234,7 @@ def decide(now_utc: datetime, watchlist_path: Path) -> dict:
         if window is not None and window > cutoff:
             windows.append(window)
             continue
-        next_recheck = _next_recheck(entry, today)
+        next_recheck = _next_recheck(entry, today) if prior_state_readable else None
         if next_recheck is not None:
             rechecks.append(next_recheck)
             continue
@@ -213,15 +243,15 @@ def decide(now_utc: datetime, watchlist_path: Path) -> dict:
             due_titles.append(title)
 
     if due_count:
-        return {
-            "wake_agent": True,
-            "data": {
-                "reason": "release_due",
-                "due_count": due_count,
-                "titles": due_titles,
-                "lead_days": LEAD.days,
-            },
+        due: dict = {
+            "reason": "release_due",
+            "due_count": due_count,
+            "titles": due_titles,
+            "lead_days": LEAD.days,
         }
+        if not prior_state_readable:
+            due["prior_state"] = "unreadable_schema_version"
+        return {"wake_agent": True, "data": due}
 
     data: dict = {
         "reason": "within_recheck_backoff" if rechecks else "all_future",

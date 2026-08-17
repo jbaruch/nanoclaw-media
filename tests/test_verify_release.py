@@ -645,6 +645,46 @@ def test_main_reports_entries_over_the_cap(verify_release, monkeypatch, capsys, 
     assert "deferred to the next run" in err
 
 
+def test_prioritize_puts_the_least_recently_resolved_first(verify_release):
+    entries = [
+        _entry("Checked Today", last_checked="2026-08-17"),
+        _entry("Never Checked"),
+        _entry("Checked Last Month", last_checked="2026-07-01"),
+        _entry("Bad Stamp", last_checked=20260817),
+    ]
+    order = [e["title"] for e in verify_release._prioritize(entries)]
+    # Unstamped and unusable-stamp entries lead, in watchlist order;
+    # then oldest resolution first.
+    assert order == ["Never Checked", "Bad Stamp", "Checked Last Month", "Checked Today"]
+
+
+def test_capped_runs_rotate_instead_of_starving_the_tail(
+    verify_release, monkeypatch, capsys, tmp_path
+):
+    """Two consecutive capped runs. Taking the first MAX_ENTRIES by file
+    order every time would re-resolve the same leading entries forever
+    and never reach the tail."""
+    overflow = 3
+    titles = [f"Show {i:02d}" for i in range(verify_release.MAX_ENTRIES + overflow)]
+    path = _write_watchlist(tmp_path, [_entry(t) for t in titles])
+    _patch_urlopen(monkeypatch, {"/search/shows": []})  # every title resolves to unknown
+
+    _, first_out, first_err = _run_main(verify_release, monkeypatch, capsys, path)
+    first = {r["title"] for r in json.loads(first_out)["results"]}
+    assert len(first) == verify_release.MAX_ENTRIES
+    deferred = set(titles) - first
+    assert len(deferred) == overflow
+    for title in deferred:
+        assert title in first_err
+
+    _, second_out, _ = _run_main(verify_release, monkeypatch, capsys, path)
+    second = {r["title"] for r in json.loads(second_out)["results"]}
+    # Every entry the first run deferred leads the second one.
+    assert deferred <= second
+    # And two runs cover the whole watchlist.
+    assert first | second == set(titles)
+
+
 def test_main_warns_but_succeeds_when_the_write_fails(
     verify_release, monkeypatch, capsys, tmp_path
 ):

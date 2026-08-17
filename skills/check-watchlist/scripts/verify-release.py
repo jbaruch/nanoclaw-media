@@ -122,8 +122,9 @@ TOTAL_BUDGET_SECONDS = 120.0
 # Cap on unnotified entries resolved per run: 2 requests each, kept
 # under TVmaze's ~20-calls-per-10s rate limit for a single run. The
 # watchlist has run to ~5 unnotified entries; the overflow is reported,
-# not dropped, and the next night's run picks it up (the ones resolved
-# tonight are backed off by then).
+# not dropped, and the next run picks it up — entries are ordered
+# least-recently-resolved first (`_prioritize`), so the capped set
+# rotates and a deferred entry cannot starve behind the same first 12.
 MAX_ENTRIES = 12
 
 ERROR_PREVIEW_BYTES = 200
@@ -405,6 +406,22 @@ def _unnotified(payload: Any) -> list[dict]:
     return [item for item in tracking if isinstance(item, dict) and item.get("notified") is False]
 
 
+def _prioritize(entries: list[dict]) -> list[dict]:
+    """Least-recently-resolved first, so the MAX_ENTRIES cap rotates.
+
+    An entry with no `last_checked` sorts first — never resolved beats
+    resolved-a-month-ago. The sort is stable, so entries stamped on the
+    same date keep their watchlist order. Without this a capped
+    watchlist would re-resolve the same leading 12 every run and the
+    tail would never be verified at all."""
+    return sorted(
+        entries,
+        key=lambda entry: (
+            entry["last_checked"] if isinstance(entry.get("last_checked"), str) else ""
+        ),
+    )
+
+
 def _stamp(entries: list[dict], results: list[dict], today: date) -> bool:
     """Write `last_checked`/`last_verdict` onto the entries the run
     actually resolved. Returns whether anything changed."""
@@ -452,12 +469,14 @@ def main() -> int:
         print(json.dumps({"error": f"{watchlist_path} is not valid JSON: {exc}"}))
         return 1
 
-    entries = _unnotified(payload)
+    entries = _prioritize(_unnotified(payload))
     skipped = max(0, len(entries) - MAX_ENTRIES)
     if skipped:
+        deferred = ", ".join(str(entry.get("title")) for entry in entries[MAX_ENTRIES:])
         sys.stderr.write(
             f"verify-release: {len(entries)} unnotified entries exceed MAX_ENTRIES="
-            f"{MAX_ENTRIES}; {skipped} deferred to the next run\n"
+            f"{MAX_ENTRIES}; {skipped} deferred to the next run (least recently "
+            f"resolved run first, so these lead it): {deferred}\n"
         )
         entries = entries[:MAX_ENTRIES]
 

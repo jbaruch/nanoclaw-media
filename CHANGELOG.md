@@ -16,6 +16,8 @@ Follow-on to #2's date gate. `_window_start()` mis-handled two `expected` format
 
 The stamps are written atomically before the agent composes anything, so a run killed later still leaves its progress behind — the persistence half of the fix. Entries whose lookup never completed (transport error, budget exhaustion) are deliberately left unstamped, so a TVmaze outage cannot mute a title for a backoff interval, and a `released` verdict is never suppressed while `notified` is false. New `skills/check-watchlist/state-schema.md` documents the `watchlist.json` contract (owner: `check-watchlist`), including the fields `recommend-shows` writes and must not migrate.
 
+Two review findings landed before merge, both about the new state fields. The precheck now gates the backoff on the record's `schema_version` (`SUPPORTED_SCHEMA_VERSION`): a record stamped newer than it accepts is no usable prior state, so it ignores the stamps and date-gates alone — waking, never suppressing on fields it cannot interpret. And the verifier's `MAX_ENTRIES` cap now orders entries least-recently-resolved first: taking the first 12 in file order every run would have re-resolved the same leading titles forever while the tail starved, since the leaders are backed off by the time the tail's wake fires.
+
 ## 0.1.39 — 2026-07-19
 
 ### Changed — Trakt api-key is gateway-injected; container holds no Trakt credential (#57)

@@ -23,6 +23,10 @@ Locks down the documented contract:
     precision warrants, so a coarse window stops waking the agent
     nightly for a year. A `released` verdict is never suppressed — that
     alert is still undelivered while `notified` is false.
+  - Schema gate: the backoff stamps are read only when the record's
+    `schema_version` is absent (legacy pre-v1) or at/below
+    `SUPPORTED_SCHEMA_VERSION`. A newer or malformed stamp is no usable
+    prior state — date-gate alone, which wakes, never suppresses.
   - main() always exits 0 with valid JSON on stdout.
 """
 
@@ -635,6 +639,108 @@ def test_decide_ignores_stamps_on_far_future_entries(precheck, tmp_path):
     assert result["wake_agent"] is False
     assert result["data"]["reason"] == "all_future"
     assert result["data"]["nearest_window"] == "2027-01-01"
+
+
+@pytest.mark.parametrize("version", [2, 99])
+def test_decide_ignores_backoff_stamps_from_a_newer_schema(precheck, tmp_path, version):
+    """A record stamped newer than this reader supports is no usable
+    prior state (`coding-policy: stateful-artifacts`): the versioned
+    fields go uninterpreted and the entry falls back to date-gating,
+    which wakes. A lagging reader must never suppress an alert on the
+    strength of fields it cannot read."""
+    path = _write(
+        tmp_path,
+        {
+            "schema_version": version,
+            "tracking": [
+                {
+                    "title": "Sometime 2026",
+                    "notified": False,
+                    "expected": "2026",
+                    "last_checked": "2026-06-11",
+                    "last_verdict": "unreleased",
+                }
+            ],
+        },
+    )
+    result = precheck.decide(NOW, path)
+    assert result["wake_agent"] is True
+    assert result["data"]["reason"] == "release_due"
+    assert result["data"]["prior_state"] == "unreadable_schema_version"
+
+
+@pytest.mark.parametrize("version", [None, 1])
+def test_decide_reads_stamps_at_or_below_the_supported_version(precheck, tmp_path, version):
+    """An absent stamp is legacy pre-v1 with the same shape; v1 is this
+    reader's own version. Both back off normally."""
+    payload = {
+        "tracking": [
+            {
+                "title": "Sometime 2026",
+                "notified": False,
+                "expected": "2026",
+                "last_checked": "2026-06-11",
+                "last_verdict": "unreleased",
+            }
+        ]
+    }
+    if version is not None:
+        payload["schema_version"] = version
+    result = precheck.decide(NOW, _write(tmp_path, payload))
+    assert result["wake_agent"] is False
+    assert result["data"]["reason"] == "within_recheck_backoff"
+
+
+@pytest.mark.parametrize("version", ["1", 1.5, True, [1]])
+def test_decide_treats_a_malformed_schema_version_as_unreadable(precheck, tmp_path, version):
+    """Anything that isn't a plain int is a stamp this reader can't
+    reason about — take the waking fallback, not the suppressing one."""
+    path = _write(
+        tmp_path,
+        {
+            "schema_version": version,
+            "tracking": [
+                {
+                    "title": "Sometime 2026",
+                    "notified": False,
+                    "expected": "2026",
+                    "last_checked": "2026-06-11",
+                    "last_verdict": "unreleased",
+                }
+            ],
+        },
+    )
+    result = precheck.decide(NOW, path)
+    assert result["wake_agent"] is True
+    assert result["data"]["prior_state"] == "unreadable_schema_version"
+
+
+def test_decide_omits_the_prior_state_marker_when_stamps_are_readable(precheck, tmp_path):
+    path = _write(
+        tmp_path,
+        {
+            "schema_version": 1,
+            "tracking": [{"title": "Fresh", "notified": False, "expected": "2026"}],
+        },
+    )
+    result = precheck.decide(NOW, path)
+    assert result["wake_agent"] is True
+    assert "prior_state" not in result["data"]
+
+
+def test_decide_still_date_gates_under_a_newer_schema(precheck, tmp_path):
+    """The unreadable-version fallback is date-gating, not blanket
+    waking — a far-future window stays asleep."""
+    path = _write(
+        tmp_path,
+        {
+            "schema_version": 2,
+            "tracking": [{"title": "Far Future", "notified": False, "expected": "2027"}],
+        },
+    )
+    result = precheck.decide(NOW, path)
+    assert result["wake_agent"] is False
+    assert result["data"]["reason"] == "all_future"
 
 
 # ---------------------------------------------------------------------------

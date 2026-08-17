@@ -49,7 +49,9 @@ For each `unknown` result, run **one** `WebSearch` call, at most 3 across the wh
 
 Derive the years from the run date in UTC — never hardcode them.
 
-Use `WebSearch` only. Do not open pages, do not spawn a subagent, do not shell out. If the search doesn't clearly show the title is out on the platform the entry tracks, treat it as not released and stay silent.
+Use `WebSearch` only. Do not open pages, do not spawn a subagent, do not shell out. **If the `WebSearch` tool is not available in this container, skip this step entirely** — treat every `unknown` as not released and stay silent. Never substitute another tool for it.
+
+If the search doesn't clearly show the title is out on the platform the entry tracks, treat it as not released and stay silent.
 
 Proceed immediately to Step 4.
 
