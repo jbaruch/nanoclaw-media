@@ -36,13 +36,13 @@ Field promises: `notified: false` is the steady state of a tracked-but-unrelease
 | Skill | Role | Promise |
 |---|---|---|
 | `check-watchlist` (`scripts/verify-release.py`) | writer + owner | Atomic-writes `last_checked` + `last_verdict` for every entry it resolved, before the agent composes anything. Leaves every other field untouched |
-| `check-watchlist` (SKILL.md Steps 4–5) | writer + owner | Sets `notified: true` plus `released` or `cancelled`, one entry at a time, writing the whole file back after each |
+| `check-watchlist` (SKILL.md Steps 4–5) | writer + owner | Sets `notified: true` plus `released` or `cancelled`, one entry at a time, writing the whole file back after each. On a failed send it sets neither and deletes that entry's `last_checked`/`last_verdict`, so the backoff cannot suppress the retry of an undelivered alert |
 | `check-watchlist` (`scripts/check-watchlist-precheck.py`) | reader | Reads `notified`, `expected`, `last_checked`, `last_verdict`; never writes. Tolerates a missing file, a missing `tracking`, and entries missing any optional field |
 | `recommend-shows` (Step 9 writer, Step 6 reader) | writer | Appends new `tracking` entries (`title`, `platform`, `expected`, `reason`, `added`, `notified: false`); never migrates, never rewrites another skill's fields |
 
 ## Migration Policy
 
-- A record **without** `schema_version` is legacy pre-v1: same shape, readable as v1. Absent `last_checked`/`last_verdict` mean "never resolved" and the entry is due.
+- A record **without** `schema_version` is legacy pre-v1: same shape, readable as v1. Absent `last_checked`/`last_verdict` mean "never resolved" and the entry is due. The owner stamps such a record on the first read — including a run with no verdicts to write — and reports `migrated_to_schema_version`; later runs see the stamp and rewrite nothing.
 - Exactly two record versions are interpretable: absent (the legacy case above) and the reader's own. Any other value — newer, older, or non-integer — is no usable prior state:
   - `scripts/check-watchlist-precheck.py` (reader, `SUPPORTED_SCHEMA_VERSION`) ignores `last_checked`/`last_verdict` and date-gates alone. That path wakes, never silences
   - `scripts/verify-release.py` (writer, `WATCHLIST_SCHEMA_VERSION`) leaves the file untouched and reports `write_skipped` — it never rewrites the marker, which would downgrade a newer record into a shape nothing understands. Verdicts still return, so a released show is still notified

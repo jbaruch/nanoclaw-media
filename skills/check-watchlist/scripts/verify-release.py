@@ -74,8 +74,10 @@ Single-line JSON on stdout, exit 0:
    "stats": {"entries", "resolved", "released", "unreleased",
              "unknown", "skipped_over_cap"},
    "write_error": "<msg>",     # only when the write-back failed
-   "write_skipped": "<msg>"}   # only when the record's version is not
+   "write_skipped": "<msg>",   # only when the record's version is not
                                # this writer's
+   "migrated_to_schema_version": 1}  # only on a legacy record's first
+                                     # stamp
 Both are warnings, not failures: the verdicts are still valid and a
 released show must still be notified, so the run continues and each
 diagnostic also goes to stderr. The writer stamps only a record it
@@ -522,12 +524,26 @@ def main() -> int:
     try:
         text = watchlist_path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as exc:
-        print(json.dumps({"error": f"cannot read {watchlist_path}: {exc}"}))
+        print(
+            json.dumps(
+                {
+                    "error": f"cannot read {watchlist_path}: {exc} — restore the file "
+                    f"or fix its read permissions, then rerun the verifier"
+                }
+            )
+        )
         return 1
     try:
         payload = json.loads(text) if text.strip() else {}
     except json.JSONDecodeError as exc:
-        print(json.dumps({"error": f"{watchlist_path} is not valid JSON: {exc}"}))
+        print(
+            json.dumps(
+                {
+                    "error": f"{watchlist_path} is not valid JSON: {exc} — repair or "
+                    f"restore valid JSON at that path, then rerun the verifier"
+                }
+            )
+        )
         return 1
 
     entries = _prioritize(_unnotified(payload))
@@ -559,10 +575,20 @@ def main() -> int:
     }
 
     if _writable_version(payload):
-        if _stamp(entries, results, now_utc.date()):
+        # The owner migrates a legacy record on READ, not only when a
+        # verdict changed: an empty or all-notified watchlist, or a run
+        # where no lookup completed, would otherwise stay unstamped
+        # forever and every future reader would keep guessing at its
+        # shape. `legacy` is true at most once per file — the next run
+        # sees the stamp and writes nothing.
+        legacy = "schema_version" not in payload
+        stamped = _stamp(entries, results, now_utc.date())
+        if legacy or stamped:
             payload["schema_version"] = WATCHLIST_SCHEMA_VERSION
             try:
                 _write_watchlist(watchlist_path, payload)
+                if legacy:
+                    output["migrated_to_schema_version"] = WATCHLIST_SCHEMA_VERSION
             except OSError as exc:
                 # The verdicts are still good and a released show must
                 # be notified, so this is a warning rather than a

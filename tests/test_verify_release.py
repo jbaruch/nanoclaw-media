@@ -688,22 +688,23 @@ def test_main_leaves_file_untouched_when_nothing_resolved(
     verify_release, monkeypatch, capsys, tmp_path
 ):
     path = _write_watchlist(tmp_path, [_entry("Black Doves")])
-    before = path.read_text()
+    before = json.loads(path.read_text())["tracking"]
     _patch_urlopen(monkeypatch, {"/search/shows": urllib.error.URLError("down")})
     code, out, _ = _run_main(verify_release, monkeypatch, capsys, path)
     assert code == 0
     assert json.loads(out)["stats"]["resolved"] == 0
-    assert path.read_text() == before
+    # The legacy root picks up its version stamp; no entry is touched.
+    assert json.loads(path.read_text())["tracking"] == before
 
 
 def test_main_is_a_no_op_when_nothing_is_unnotified(verify_release, monkeypatch, capsys, tmp_path):
     path = _write_watchlist(tmp_path, [{"title": "Done", "notified": True}])
-    before = path.read_text()
+    before = json.loads(path.read_text())["tracking"]
     _patch_urlopen(monkeypatch, {})
     code, out, _ = _run_main(verify_release, monkeypatch, capsys, path)
     assert code == 0
     assert json.loads(out)["stats"]["entries"] == 0
-    assert path.read_text() == before
+    assert json.loads(path.read_text())["tracking"] == before
 
 
 def test_main_reports_entries_over_the_cap(verify_release, monkeypatch, capsys, tmp_path):
@@ -814,6 +815,62 @@ def test_main_stamps_a_record_at_its_own_version(
     written = json.loads(path.read_text())
     assert written["schema_version"] == 1
     assert written["tracking"][0]["last_verdict"] == "released"
+
+
+@pytest.mark.parametrize(
+    "record",
+    [
+        {"tracking": []},
+        {"tracking": [{"title": "Done", "notified": True}]},
+        {},
+    ],
+)
+def test_main_migrates_a_legacy_record_it_had_no_verdicts_for(
+    verify_release, monkeypatch, capsys, tmp_path, record
+):
+    """The owner migrates on read, not only when a verdict changed —
+    an empty or all-notified watchlist would otherwise stay unstamped
+    forever."""
+    path = tmp_path / "watchlist.json"
+    path.write_text(json.dumps(record), encoding="utf-8")
+    _patch_urlopen(monkeypatch, {})
+    code, out, _ = _run_main(verify_release, monkeypatch, capsys, path)
+
+    assert code == 0
+    assert json.loads(out)["migrated_to_schema_version"] == 1
+    assert json.loads(path.read_text())["schema_version"] == 1
+
+
+def test_main_migrates_a_legacy_record_when_no_lookup_completed(
+    verify_release, monkeypatch, capsys, tmp_path
+):
+    path = _write_watchlist(tmp_path, [_entry("Black Doves")])
+    _patch_urlopen(monkeypatch, {"/search/shows": urllib.error.URLError("down")})
+    _, out, _ = _run_main(verify_release, monkeypatch, capsys, path)
+
+    written = json.loads(path.read_text())
+    assert json.loads(out)["stats"]["resolved"] == 0
+    assert written["schema_version"] == 1
+    # Migrating the root must not invent verdict stamps for entries the
+    # run never resolved.
+    assert "last_checked" not in written["tracking"][0]
+
+
+def test_main_does_not_rewrite_an_already_stamped_record(
+    verify_release, monkeypatch, capsys, tmp_path
+):
+    """Migration fires once. A stamped record with nothing to resolve is
+    left byte-identical rather than rewritten every night."""
+    path = tmp_path / "watchlist.json"
+    path.write_text(
+        json.dumps({"schema_version": 1, "tracking": [{"title": "Done", "notified": True}]}),
+        encoding="utf-8",
+    )
+    before = path.read_text()
+    _patch_urlopen(monkeypatch, {})
+    _, out, _ = _run_main(verify_release, monkeypatch, capsys, path)
+    assert "migrated_to_schema_version" not in json.loads(out)
+    assert path.read_text() == before
 
 
 def test_main_does_not_warn_about_version_when_there_is_nothing_to_write(

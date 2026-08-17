@@ -70,6 +70,8 @@ For each released show, complete all four sub-steps before moving to the next on
 3. Set `notified: true` and add `"released": "YYYY-MM-DD"` (the verifier's `premiere_date`, today's UTC date when absent)
 4. Read the full watchlist.json, update only that entry, write the complete file back
 
+**If the send fails**, the alert is still owed. Do NOT set `notified: true`. Instead delete that entry's `last_checked` and `last_verdict`, write the file back, and surface the send error verbatim via the next successful channel. Removing the stamp is what makes the next fire retry: an entry the verifier resolved as `unknown` (a Step 3 release) would otherwise sit inside its recheck backoff for up to a month with the alert never delivered. Then continue with the remaining released shows.
+
 Proceed immediately to Step 5.
 
 ## Step 5 — Mark cancelled shows
