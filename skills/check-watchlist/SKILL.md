@@ -12,13 +12,15 @@ Process steps in order. Do not skip ahead.
 
 Monitors `/workspace/group/watchlist.json` for upcoming shows and notifies when they release.
 
-This skill runs inside a maintenance slot the host reaps after 300s without SDK events. Keep verification bounded and in-process: **never spawn a subagent, and never reach the network with `curl`, `fetch_markdown`, or any page fetch**.
+Keep verification bounded and in-process. **Never spawn a subagent, and never reach the network with `curl`, `fetch_markdown`, or any page fetch.**
 
 ## Step 1 — Read watchlist
 
-Read `/workspace/group/watchlist.json`. If the file doesn't exist or `tracking` array is empty, exit silently.
+Read `/workspace/group/watchlist.json`. If the file doesn't exist, exit silently.
 
-Filter to shows where `notified: false` only. Proceed immediately to Step 2.
+Note which shows have `notified: false` — those are the ones Step 2's verdicts will cover. An empty `tracking` array is not an exit: Step 2 still runs, and stamps a record that carries no `schema_version` yet.
+
+Proceed immediately to Step 2.
 
 ## Step 2 — Verify release status
 
@@ -42,6 +44,8 @@ On a non-zero exit or an `{"error": ...}` payload, surface the script's stdout/s
 A `write_skipped` field means the record is at a `schema_version` this skill cannot write. Surface it verbatim and finish here — deliver nothing and mark nothing.
 
 A `write_error` field is a warning, not a failure — the verdicts still hold. Continue, and mention it in Step 4's message.
+
+An empty `results[]` means nothing needed checking. Finish here.
 
 Proceed immediately to Step 3.
 
