@@ -2,6 +2,20 @@
 
 All notable changes to this plugin are documented here.
 
+### Fixed — check-watchlist verification is bounded and deterministic; the nightly retry loop is broken (#67)
+
+`check-watchlist` was force-killed two nights running (2026-08-14 after ~448s, 2026-08-15 after ~322s, exit 137) and delivered no notification either night. SKILL.md Step 2 ("do a web search" per unnotified show) was free-form; the Haiku maintenance agent satisfied it by spawning a `general-purpose` subagent doing `fetch_markdown` (Netflix Tudum, apple.com) plus a `curl` to Google. Those fetches stalled, the container emitted no SDK events for 300s, and the host inactivity watchdog reaped it **before** Step 3 — which is where the alert is sent *and* where `notified` flips. So a killed run delivered nothing and marked nothing, and the identical set was re-checked and re-killed the next night. Worse than the wasted container: had one of those titles actually been out, the real alert would have been lost the same way.
+
+Step 2 is now `scripts/verify-release.py`, an in-container script that resolves each unnotified entry against TVmaze (`/search/shows` then `/shows/<id>/seasons`, no auth) under a hard per-request timeout and a whole-run wall-clock budget — the six live watchlist titles resolve in ~6s against the 300s watchdog. Title matching is exact-or-nothing (casefolded, whitespace-collapsed) because TVmaze ranks fuzzy hits high enough to resolve a spin-off; a near-miss returns `unknown` and Step 3 settles it with at most one `WebSearch` per title, capped at 3 per run. SKILL.md now forbids spawning a subagent or reaching the network with `curl`/`fetch_markdown` outright, and Step 4 sends-then-writes per show instead of batching every write to the end, so a kill mid-delivery can no longer lose the shows already notified.
+
+A premiere date alone is not a release the owner can watch: TVmaze reports the first airing anywhere, and Fauda S5 premiered 2026-05-18 on Israeli Yes while the watchlist tracks its later Netflix international drop. A `released` verdict whose channel doesn't match the entry's `platform` (compared on alphanumerics, containment either way, so `Apple TV` matches `Apple TV+`) is downgraded to `unknown`/`platform_mismatch` — the same false alert #67's manual stopgap caught by hand, now caught by the script.
+
+### Fixed — precheck stops waking nightly for entries nothing has changed about (#67)
+
+Follow-on to #2's date gate. `_window_start()` mis-handled two `expected` formats that were live in `watchlist.json`: `YYYY-MM` (`2026-10`, Fauda S5) parsed as nothing at all and fell through to the conservative wake, and a bare year anchored to Jan 1, so past Jan 1 with no release the window stayed open for the remaining eleven months — all four tracked titles flagged `release_due` every single night. `YYYY-MM` now anchors to the first of that month. The bare-year anchor stays at Jan 1 deliberately: moving it to the year's final quarter (the other option floated on #67) would have blinded the check to a March release for nine months. Instead, re-asking is rate-limited by how precise the `expected` value is (`_RECHECK_INTERVALS`: dated daily, `YYYY-MM` weekly, quarter fortnightly, bare year and un-parseable monthly), read off the `last_checked`/`last_verdict` stamps `verify-release.py` writes back. A bare-year entry now wakes the agent ~12 times a year instead of 365, without narrowing the window it is checked in.
+
+The stamps are written atomically before the agent composes anything, so a run killed later still leaves its progress behind — the persistence half of the fix. Entries whose lookup never completed (transport error, budget exhaustion) are deliberately left unstamped, so a TVmaze outage cannot mute a title for a backoff interval, and a `released` verdict is never suppressed while `notified` is false. New `skills/check-watchlist/state-schema.md` documents the `watchlist.json` contract (owner: `check-watchlist`), including the fields `recommend-shows` writes and must not migrate.
+
 ## 0.1.39 — 2026-07-19
 
 ### Changed — Trakt api-key is gateway-injected; container holds no Trakt credential (#57)
