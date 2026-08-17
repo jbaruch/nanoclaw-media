@@ -134,7 +134,7 @@ For announced-but-not-released shows (or just-announced new seasons) matching ta
 
 Use the most precise `expected` known. Full field contract: `skills/check-watchlist/state-schema.md` (owner: `check-watchlist`).
 
-Write the candidates with the `Write` tool to `/tmp/recommend-shows-watchlist.json`, never by interpolating titles into a shell command — an apostrophe in a title would break it. The script owns the merge, the duplicate check, and the record's `schema_version`:
+Write the candidates with the `Write` tool to `/tmp/recommend-shows-watchlist.json`, never by interpolating titles into a shell command. The script owns the merge, the duplicate check, and the record's `schema_version`:
 
 ```json
 [{"title": "...", "platform": "...", "expected": "...", "reason": "...", "added": "YYYY-MM-DD"}]
