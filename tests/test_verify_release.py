@@ -764,14 +764,29 @@ def test_prioritize_treats_an_unparseable_stamp_as_never_resolved(verify_release
 
 
 def test_prioritize_orders_a_non_canonical_stamp_by_its_actual_date(verify_release):
-    """`20260701` is a real date spelled without separators; as raw text
-    it sorts after `2026-08-17`, which would invert the rotation."""
+    """A real date spelled without separators sorts by the date it means.
+
+    One compact stamp on each side of a canonical one, because the two
+    wrong answers fail differently and a single compact entry cannot
+    catch both. `"-"` sorts below every digit, so comparing raw text
+    drags both compact stamps behind `2026-08-01`; reading them as
+    unusable sends both to the front instead."""
     entries = [
-        _entry("Checked Today", last_checked=_TODAY.isoformat()),
-        _entry("Compact Stamp", last_checked="20260701"),
+        _entry("Old Compact", last_checked="20260701"),
+        _entry("Never Checked"),
+        _entry("Canonical Mid", last_checked="2026-08-01"),
+        _entry("New Compact", last_checked="20260817"),
     ]
     order = [e["title"] for e in verify_release._prioritize(entries)]
-    assert order == ["Compact Stamp", "Checked Today"]
+    assert order == ["Never Checked", "Old Compact", "Canonical Mid", "New Compact"]
+
+
+def test_sort_stamp_normalizes_what_it_accepts(verify_release):
+    assert verify_release._sort_stamp({"last_checked": "20260701"}) == "2026-07-01"
+    assert verify_release._sort_stamp({"last_checked": "2026-07-01"}) == "2026-07-01"
+    assert verify_release._sort_stamp({"last_checked": "yesterday"}) == ""
+    assert verify_release._sort_stamp({"last_checked": 20260701}) == ""
+    assert verify_release._sort_stamp({}) == ""
 
 
 def test_capped_runs_rotate_instead_of_starving_the_tail(
