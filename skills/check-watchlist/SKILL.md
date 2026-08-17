@@ -61,24 +61,27 @@ Derive the years from the run date in UTC — never hardcode them.
 
 Use `WebSearch` only. Do not open pages, do not spawn a subagent, do not shell out. **If the `WebSearch` tool is not available in this container, skip this step entirely** — treat every `unknown` as not released and stay silent. Never substitute another tool for it.
 
-If the search doesn't clearly show the title is out on the platform the entry tracks, treat it as not released and stay silent.
+Classify each searched title:
+- **Released** — the search clearly shows it is out on the platform the entry tracks. Carry it into Step 4.
+- **Cancelled** — the search clearly shows it was cancelled before release. Carry it into Step 5.
+- **Not released** — everything else, a thin or ambiguous result included. Stay silent.
 
 Proceed immediately to Step 4.
 
 ## Step 4 — Deliver each released show
 
-For each released show, complete all four sub-steps before moving to the next one. Never batch the writes to the end of the run.
+Take the released shows one at a time. For each, in order: compose, send, mark, write. Never batch the writes to the end of the run.
 
-1. Compose a short notification message (Telegram HTML format):
-   ```
-   📺 <b>[Title]</b> is now available on [Platform]!
-   [1 sentence why Baruch will like it, from the `reason` field]
-   ```
-2. Send via `mcp__nanoclaw__send_message` (standalone, not a reply — this is a proactive alert)
-3. Set `notified: true` and add `"released": "YYYY-MM-DD"` (the verifier's `premiere_date`, today's UTC date when absent)
-4. Read the full watchlist.json, update only that entry, write the complete file back
+- Compose a short notification message (Telegram HTML format):
+  ```
+  📺 <b>[Title]</b> is now available on [Platform]!
+  [1 sentence why Baruch will like it, from the `reason` field]
+  ```
+- Send via `mcp__nanoclaw__send_message` (standalone, not a reply — this is a proactive alert)
+- Set `notified: true` and add `"released": "YYYY-MM-DD"` (the verifier's `premiere_date`, today's UTC date when absent)
+- Read the full watchlist.json, update only that entry, write the complete file back
 
-After sub-step 4 succeeds, repeat all four for the next released show. Reach Step 5 only once every released show has been delivered and written.
+Once that write succeeds, start the next released show. Reach Step 5 only when every released show has been delivered and written.
 
 **If the send fails:** leave `notified` false, delete that entry's `last_checked` and `last_verdict`, write the file back, surface the send error verbatim, then continue with the remaining released shows.
 
@@ -90,7 +93,7 @@ Once every released show is done, proceed immediately to Step 5.
 
 ## Step 5 — Mark cancelled shows
 
-For a show a Step 3 search shows was cancelled before release: set `notified: true`, add `"cancelled": true`, write the file back. Do NOT notify Baruch — a cancelled show is not actionable.
+For each title Step 3 classified as cancelled: set `notified: true`, add `"cancelled": true`, write the file back. Do NOT notify Baruch — a cancelled show is not actionable. If no title was classified cancelled, do nothing here.
 
 Finish here. Shows that are not out stay silent and untouched beyond the verifier's own `last_checked` stamp.
 
