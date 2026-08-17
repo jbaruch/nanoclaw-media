@@ -29,6 +29,22 @@ def csv_append(tmp_path, monkeypatch):
 
 
 @pytest.fixture
+def verify_release():
+    """Load check-watchlist/scripts/verify-release.py.
+
+    The script reads `CHECK_WATCHLIST_PATH` and `TVMAZE_API_BASE` at
+    `main()` time, so tests use `monkeypatch.setenv(...)`; no
+    module-level paths to redirect. Tests patch `urllib.request.urlopen`
+    to drive the TVmaze lookup / failure branches without real requests,
+    and freeze `module.datetime` so the released-vs-unreleased
+    comparison doesn't depend on the run date."""
+    return _load(
+        "verify_release_under_test",
+        "skills/check-watchlist/scripts/verify-release.py",
+    )
+
+
+@pytest.fixture
 def trakt_watch_history():
     """Load trakt-watch-history/scripts/trakt-watch-history.py.
 

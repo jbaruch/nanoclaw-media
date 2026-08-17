@@ -36,7 +36,7 @@ Load the overlay at the **main or trusted** tier — the cadence skills material
 |----------|---------|---------|
 | `YOUTUBE_API_KEY` | youtube-comment-check | YouTube Data API v3 key |
 
-NanoClaw forwards these into main/trusted containers. Trakt requires no container variable at all: watch-history requests route through the OneCLI gateway, which injects **every** Trakt credential on the wire — the custom-oauth connection injects the OAuth Bearer, and a header-injection secret injects the client id as the `trakt-api-key` header. No Trakt client id or token lives in the container or `.env`. The recommendation skills (`recommend-shows`, `recommend-books`) consume no secrets — they read owner-uploaded CSV/JSON data.
+NanoClaw forwards these into main/trusted containers. `check-watchlist` verifies release dates against TVmaze (`https://api.tvmaze.com`), which needs no credential — only container egress to that host. Trakt requires no container variable at all: watch-history requests route through the OneCLI gateway, which injects **every** Trakt credential on the wire — the custom-oauth connection injects the OAuth Bearer, and a header-injection secret injects the client id as the `trakt-api-key` header. No Trakt client id or token lives in the container or `.env`. The recommendation skills (`recommend-shows`, `recommend-books`) consume no secrets — they read owner-uploaded CSV/JSON data.
 
 ## Runtime data
 
@@ -45,7 +45,7 @@ The skills read and write files under the shared `/workspace/group/` mount:
 | File | Access | Owner |
 |------|--------|-------|
 | `trakt-history.json` | write (`entertainment-sync`/`trakt-watch-history`), read (`recommend-shows`) | this plugin |
-| `watchlist.json` | write (`recommend-shows`), read (`check-watchlist`) | this plugin |
+| `watchlist.json` | write (`recommend-shows` adds entries, `check-watchlist` stamps verdicts), read (`check-watchlist`) | this plugin ([schema](skills/check-watchlist/state-schema.md)) |
 | `books-library.csv` | write (`audible-backup`), read (`recommend-books`) | this plugin |
 | `netflix-history.csv` | read | owner-uploaded |
 | `imdb-ratings.csv` | read | owner-uploaded |
