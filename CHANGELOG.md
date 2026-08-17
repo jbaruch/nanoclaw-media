@@ -2,6 +2,8 @@
 
 All notable changes to this plugin are documented here.
 
+## 0.1.50 — 2026-08-17
+
 ### Fixed — advisory follow-ups from PR #68's review (#68)
 
 The round-17 policy review and Copilot's post-merge pass on #68 raised five advisories; none gated the merge, and all five are cleaned up here rather than left as a record nobody reads.
