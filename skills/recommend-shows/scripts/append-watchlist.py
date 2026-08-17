@@ -1,0 +1,323 @@
+#!/usr/bin/env python3
+"""Append tracked shows to watchlist.json for `tessl__recommend-shows`.
+
+Step 9 used to hand the agent the merge itself: read the file, check for
+duplicates, add entries, write it back — plus the `schema_version`
+branching that came with the state contract. Deterministic work with
+known inputs and outputs belongs in a script (`coding-policy:
+script-delegation`), so the agent now supplies the candidate shows and
+this script owns the merge.
+
+`recommend-shows` is a NON-OWNER writer of watchlist.json (owner:
+`check-watchlist`, contract in skills/check-watchlist/state-schema.md),
+which sets the version rules this script enforces:
+  - No file at all -> create it stamped `WATCHLIST_SCHEMA_VERSION`. A
+    record this script authors is its own, not a migration. An
+    existing-but-empty file is state, not absence, and is refused.
+  - Record already at `WATCHLIST_SCHEMA_VERSION` -> append, preserving
+    the stamp.
+  - Unstamped (legacy pre-v1) or any other version -> read-only. Append
+    nothing, write nothing, exit non-zero naming the version found.
+    Migrating is the owner's job; the nightly `check-watchlist` run
+    stamps a legacy record when it reads one, and the next run of this
+    skill lands the shows.
+
+Input
+-----
+A JSON array of candidate shows in the file named by `--input`, never
+shell text: a title carrying an apostrophe (`It's Always Sunny`) would
+break a quoted command line, and `$(...)` would do worse. The caller
+writes the file, then names its path.
+
+  append-watchlist.py --input <path>
+
+  [{"title", "platform", "expected", "reason", "added"}, ...]
+Every field is required and must be a non-empty string; `added` is a
+canonical `YYYY-MM-DD`. `notified` is set to false by this script and is
+rejected in the input — delivery state is the owner's to write.
+`expected` accepts the fuzzy formats the precheck parses (`YYYY-MM-DD`,
+`YYYY-Qn`, `YYYY-MM`, `YYYY`); anything else is refused, since an
+unparseable window silently becomes a nightly wake.
+
+Duplicates are detected on the title after casefolding and whitespace
+collapse — the same rule the other watchlist scripts use — and skipped
+rather than added twice.
+
+Environment
+-----------
+  CHECK_WATCHLIST_PATH — watchlist.json path (default
+    /workspace/group/watchlist.json), shared with the owner's scripts.
+
+Output
+------
+Single-line JSON on stdout.
+  exit 0: {"added": ["<title>", ...], "skipped_duplicates": [...],
+           "created": <bool>, "tracking_count": N, "schema_version": 1}
+  exit 1: {"error": "<what failed and what to do about it>"}
+Every failure also writes its diagnostic to stderr and adds nothing. An
+empty input array is a valid no-op, not an error. A malformed
+`tracking` on an existing record is refused rather than replaced — a
+non-owner writer does not repair another skill's state.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import sys
+from datetime import date
+from pathlib import Path
+from typing import Any
+
+DEFAULT_WATCHLIST_PATH = "/workspace/group/watchlist.json"
+
+# The one record version this skill knows how to append to, matching
+# the owner's WATCHLIST_SCHEMA_VERSION.
+WATCHLIST_SCHEMA_VERSION = 1
+
+# Every v1 field this writer authors, in record order. All are
+# required: a half-populated entry is a shape the readers' contract
+# does not describe, and `expected` in particular drives the release
+# check's wake window.
+ENTRY_FIELDS = ("title", "platform", "expected", "reason", "added")
+
+_WHITESPACE_RE = re.compile(r"\s+")
+# The fuzzy `expected` formats check-watchlist-precheck.py anchors to a
+# release window. A value outside these parses as nothing and turns the
+# entry into a nightly wake, so it is refused at the door.
+_EXPECTED_RE = re.compile(r"\d{4}(-(\d{2}-\d{2}|[Qq][1-4]|0[1-9]|1[0-2]))?")
+
+
+def _normalize(text: str) -> str:
+    return _WHITESPACE_RE.sub(" ", text).strip().casefold()
+
+
+def _fail(message: str) -> int:
+    """Structured payload on stdout for the skill, actionable diagnostic
+    on stderr for the operator reading `task_run_logs`."""
+    print(json.dumps({"error": message}))
+    sys.stderr.write(f"append-watchlist: {message}\n")
+    return 1
+
+
+def _valid_expected(value: object) -> bool:
+    if not isinstance(value, str) or not _EXPECTED_RE.fullmatch(value.strip()):
+        return False
+    if len(value.strip()) == 10:
+        # A full ISO date must be a real one — 2026-13-40 matches the
+        # shape and anchors to nothing.
+        try:
+            date.fromisoformat(value.strip())
+        except ValueError:
+            return False
+    return True
+
+
+def _valid_added(value: str) -> bool:
+    """`added` is a canonical `YYYY-MM-DD` date in the record contract."""
+    try:
+        return date.fromisoformat(value.strip()).isoformat() == value.strip()
+    except ValueError:
+        return False
+
+
+def _clean_candidates(raw: Any) -> tuple[list[dict], str | None]:
+    if not isinstance(raw, list):
+        return [], "the input file must carry a JSON array of show objects"
+    candidates: list[dict] = []
+    for index, item in enumerate(raw):
+        if not isinstance(item, dict):
+            return [], f"entry {index} is not a JSON object"
+        if "notified" in item:
+            return [], (
+                f"entry {index} carries `notified` — delivery state belongs to check-watchlist; "
+                f"drop the field and rerun"
+            )
+        for field in ENTRY_FIELDS:
+            value = item.get(field)
+            if not isinstance(value, str) or not value.strip():
+                return [], (
+                    f"entry {index} has no usable `{field}` — every one of "
+                    f"{', '.join(ENTRY_FIELDS)} is required and must be a non-empty string"
+                )
+        if not _valid_expected(item["expected"]):
+            return [], (
+                f"entry {index} has `expected` {item['expected']!r}, which the release precheck "
+                f"cannot anchor — use YYYY-MM-DD, YYYY-Qn, YYYY-MM, or YYYY"
+            )
+        if not _valid_added(item["added"]):
+            return [], (
+                f"entry {index} has `added` {item['added']!r} — use the canonical YYYY-MM-DD "
+                f"date the entry was tracked on"
+            )
+        entry = {field: item[field].strip() for field in ENTRY_FIELDS}
+        entry["notified"] = False
+        candidates.append(entry)
+    return candidates, None
+
+
+def _load(path: Path) -> tuple[dict | None, bool, str | None]:
+    """(payload, created, error). `created` is True when the file is
+    absent and this run authors the record."""
+    try:
+        text = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return {"schema_version": WATCHLIST_SCHEMA_VERSION, "tracking": []}, True, None
+    except (OSError, UnicodeDecodeError) as exc:
+        return (
+            None,
+            False,
+            (
+                f"cannot read {path}: {exc} — restore the file or fix its read "
+                f"permissions, then rerun"
+            ),
+        )
+    if not text.strip():
+        # An existing-but-empty file is state some writer left behind,
+        # not an absent artifact. Creating a record over it would be
+        # this non-owner writer overwriting the owner's state.
+        return (
+            None,
+            False,
+            (
+                f"{path} exists but is empty — that is not a watchlist record; restore a valid "
+                f"record or remove the file, then rerun"
+            ),
+        )
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError as exc:
+        return (
+            None,
+            False,
+            (
+                f"{path} is not valid JSON: {exc} — repair or restore valid JSON at that path, "
+                f"then rerun"
+            ),
+        )
+    if not isinstance(payload, dict):
+        return None, False, f"{path} root is not a JSON object — restore a valid watchlist record"
+    version = payload.get("schema_version")
+    # `True == 1` in Python, so a bare equality check would accept a
+    # boolean stamp as version 1 and let this non-owner writer edit a
+    # malformed record.
+    if not (
+        isinstance(version, int)
+        and not isinstance(version, bool)
+        and version == WATCHLIST_SCHEMA_VERSION
+    ):
+        return (
+            None,
+            False,
+            (
+                f"{path} is at schema_version {version!r}, not "
+                f"{WATCHLIST_SCHEMA_VERSION} — this skill is a non-owner writer and does "
+                f"not migrate; "
+                f"the next check-watchlist run stamps a legacy record, so rerun after it"
+            ),
+        )
+    if not isinstance(payload.get("tracking"), list):
+        return (
+            None,
+            False,
+            (
+                f"{path} has no usable `tracking` list — a non-owner writer does not repair "
+                f"another skill's state; restore the list, then rerun"
+            ),
+        )
+    return payload, False, None
+
+
+def _write(path: Path, payload: dict) -> str | None:
+    tmp_path = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+    try:
+        tmp_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+        os.replace(tmp_path, path)
+    except OSError as exc:
+        try:
+            tmp_path.unlink()
+        except FileNotFoundError:
+            pass
+        return (
+            f"could not write {path}: {type(exc).__name__}: {exc} — no show was added; "
+            f"fix the destination's permissions or free space, then rerun"
+        )
+    return None
+
+
+def _parse_args(argv: list[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--input",
+        required=True,
+        metavar="PATH",
+        help="JSON file holding the array of candidate shows",
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = _parse_args(sys.argv[1:] if argv is None else argv)
+    input_path = Path(args.input)
+    path = Path(os.environ.get("CHECK_WATCHLIST_PATH", DEFAULT_WATCHLIST_PATH))
+    try:
+        text = input_path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return _fail(f"--input {input_path} does not exist — write the candidates JSON there first")
+    except (OSError, UnicodeDecodeError) as exc:
+        return _fail(f"cannot read --input {input_path}: {exc} — fix its permissions, then rerun")
+    try:
+        raw = json.loads(text or "[]")
+    except json.JSONDecodeError as exc:
+        return _fail(
+            f"--input {input_path} is not valid JSON: {exc} — write a JSON array of show objects"
+        )
+
+    candidates, candidate_error = _clean_candidates(raw)
+    if candidate_error is not None:
+        return _fail(candidate_error)
+
+    payload, created, load_error = _load(path)
+    if payload is None:
+        return _fail(load_error or f"cannot load {path}")
+
+    tracking = payload["tracking"]
+    seen = {
+        _normalize(entry["title"])
+        for entry in tracking
+        if isinstance(entry, dict) and isinstance(entry.get("title"), str)
+    }
+    added: list[str] = []
+    skipped: list[str] = []
+    for candidate in candidates:
+        key = _normalize(candidate["title"])
+        if key in seen:
+            skipped.append(candidate["title"])
+            continue
+        seen.add(key)
+        tracking.append(candidate)
+        added.append(candidate["title"])
+
+    if added or created:
+        write_error = _write(path, payload)
+        if write_error is not None:
+            return _fail(write_error)
+
+    print(
+        json.dumps(
+            {
+                "added": added,
+                "skipped_duplicates": skipped,
+                "created": created,
+                "tracking_count": len(tracking),
+                "schema_version": WATCHLIST_SCHEMA_VERSION,
+            }
+        )
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

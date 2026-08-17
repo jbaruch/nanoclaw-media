@@ -2,6 +2,26 @@
 
 All notable changes to this plugin are documented here.
 
+### Fixed — check-watchlist verification is bounded; the alert and the nightly retry loop are both fixed (#67)
+
+`check-watchlist` was force-killed on 2026-08-14 and 2026-08-15 (exit 137, ~448s and ~322s) and delivered no notification either night. SKILL.md Step 2's free-form "do a web search" was satisfied by a spawned `general-purpose` subagent doing `fetch_markdown` + `curl`; the fetches stalled and the 300s host inactivity watchdog reaped the container before Step 3, which is where the alert is sent *and* where `notified` flips — so the same set was re-checked and re-killed nightly.
+
+Step 2 is now `scripts/verify-release.py`: it resolves a bounded batch of unnotified entries against TVmaze under a per-request timeout and a whole-run wall-clock budget, and stamps `last_checked`/`last_verdict` atomically before the agent composes anything. Title matching is exact-or-nothing; unresolved titles fall back to at most one `WebSearch` each, capped per run. The skill forbids spawning a subagent or fetching pages outright, sends-then-writes per show, and defines both send-failure orders — a failed send clears the entry's stamps so the next fire retries, a failed post-send write names every title already delivered and stops. A `released` verdict the entry's `platform` doesn't corroborate is downgraded (`platform_mismatch` / `platform_unverified`) rather than alerted: TVmaze reports the first airing anywhere, and Fauda S5's Israeli premiere is not the Netflix drop the watchlist waits on.
+
+### Fixed — precheck parses `YYYY-MM` and rate-limits rechecks (#67)
+
+Follow-on to #2's date gate. `2026-10` matched none of the supported `expected` formats and fell through to the conservative nightly wake; a bare year anchored to Jan 1 and kept the window open for the remaining eleven months. `YYYY-MM` now anchors to the first of the month, and re-asking about an entry a run already resolved is rate-limited by the precision of `expected` (`_RECHECK_INTERVALS`), read off the verifier's stamps. A bare-year entry wakes ~12 times a year instead of 365, with the window it is checked in unchanged — narrowing the anchor instead would have blinded the check to an early-in-the-year release. An entry whose lookup never completed carries no stamp and stays due, and a `released` verdict is never suppressed while `notified` is false.
+
+### Changed — watchlist mutations move out of skill prose into scripts (#67)
+
+Both skills used to direct the agent to read `watchlist.json`, find the entry, edit fields, and write the file back by hand — the delivery bookkeeping in `check-watchlist` Steps 4–5, the merge and duplicate check in `recommend-shows` Step 9. That is deterministic work with known inputs and outputs, so it moves into two single-purpose scripts per `coding-policy: script-delegation`, and the failure orders that matter become testable instead of prose the agent interprets.
+
+`skills/check-watchlist/scripts/mark-entry.py` applies exactly one mutation to one entry — `--released`, `--cancelled`, or `--clear-stamps` for the failed-send rollback — matching titles by the same normalization `verify-release.py` uses, stamping a legacy record, refusing any other version, and reporting `already_marked` on a repeat so a retried run cannot corrupt bookkeeping. Exit 1 always means the mutation did not land, which is what lets the skill stop instead of delivering shows it cannot record. Both scripts take their input as a JSON file the agent writes rather than as command-line text: a show title is data from the wider web, and `It's Always Sunny` alone would break a quoted invocation. `skills/recommend-shows/scripts/append-watchlist.py` takes candidate shows as a JSON file and owns the merge: it writes `notified` itself and rejects it in the input, refuses an `expected` the precheck cannot anchor, skips duplicates on the normalized title, creates a record stamped version 1, and treats an unstamped or otherwise-versioned record as read-only.
+
+### Added — `watchlist.json` state contract (#67)
+
+`skills/check-watchlist/state-schema.md` documents the record shape, the `schema_version` rules, and the writer/reader split. Migration upgrades a valid older record and never legitimizes a broken one: a root without a `tracking` list is refused by every script rather than stamped. `check-watchlist` owns the file: it migrates an unstamped legacy record on read, writes only a record at its own version (reporting `write_skipped` otherwise), and its precheck interprets the backoff stamps at exactly that version, date-gating alone at any other. `recommend-shows` is a non-owner writer — it appends only to a record already at version `1`, stamps `1` on a record it creates, and treats anything else as read-only.
+
 ## 0.1.39 — 2026-07-19
 
 ### Changed — Trakt api-key is gateway-injected; container holds no Trakt credential (#57)

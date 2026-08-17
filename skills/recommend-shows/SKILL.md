@@ -126,13 +126,25 @@ For announced-but-not-released shows (or just-announced new seasons) matching ta
 {
   "title": "Show Name",
   "platform": "Platform",
-  "expected": "YYYY or YYYY-QN",
+  "expected": "YYYY-MM-DD, YYYY-Qn, YYYY-MM, or YYYY",
   "reason": "Why it matches Baruch's taste",
-  "added": "YYYY-MM-DD",
-  "notified": false
+  "added": "YYYY-MM-DD"
 }
 ```
 
-Read existing watchlist.json first, merge, write back. No duplicates.
+Use the most precise `expected` known. Full field contract: `skills/check-watchlist/state-schema.md` (owner: `check-watchlist`).
+
+Write the candidates with the `Write` tool to `/tmp/recommend-shows-watchlist.json`, never by interpolating titles into a shell command — an apostrophe in a title would break it. The script owns the merge, the duplicate check, and the record's `schema_version`:
+
+```json
+[{"title": "...", "platform": "...", "expected": "...", "reason": "...", "added": "YYYY-MM-DD"}]
+```
+
+```bash
+python3 /home/node/.claude/skills/tessl__recommend-shows/scripts/append-watchlist.py \
+  --input /tmp/recommend-shows-watchlist.json
+```
+
+Do not set `notified` — the script writes it. Exit 0 returns `added`, `skipped_duplicates`, and `created`; report nothing for a clean run. On a non-zero exit, surface the script's `error` verbatim and add no shows. Input contract, accepted `expected` formats, and version rules: `skills/recommend-shows/scripts/append-watchlist.py` module docstring.
 
 Finish here — the skill is complete.
