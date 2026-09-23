@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "package_roots": [
+    "skills/*"
+  ],
+  "package_change_lines": 400,
+  "trust_boundary_paths": [
+    ".github/workflows/*",
+    "skills/audible-backup/*",
+    "skills/check-watchlist/*",
+    "skills/entertainment-sync/*",
+    "skills/trakt-watch-history/*",
+    "skills/youtube-comment-check/*"
+  ],
+  "cli_spec_paths": [
+    "skills/*/scripts/*.py"
+  ],
+  "cli_surface_markers": [
+    "add_parser(",
+    "add_argument(",
+    "ArgumentParser("
+  ],
+  "user_doc_paths": [
+    "README.md",
+    "skills/*/SKILL.md"
+  ]
+}
