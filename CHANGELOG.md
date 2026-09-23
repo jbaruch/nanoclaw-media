@@ -1,5 +1,9 @@
 # Changelog
 
+### Fixed — identify YouTube comment notifications at a glance (#77)
+
+`youtube-comment-check` now starts every non-empty digest with `🎬 <b>New YouTube comment(s)</b> (N)` and a blank line before the first video block. The total count in the header makes the notification recognizable without changing comment fetching, per-video grouping, or HTML-escaping of untrusted fields.
+
 ## 0.1.51 — 2026-08-18
 
 ### Chore — commit `tessl.json` as the dependency manifest it is
