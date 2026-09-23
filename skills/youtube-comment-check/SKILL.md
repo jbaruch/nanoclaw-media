@@ -32,7 +32,7 @@ On non-zero exit (missing `YOUTUBE_API_KEY`, auth/quota error, network timeout, 
 
 ## Step 2 — Report new comments
 
-If at least one comment exists across all videos (`comment_count > 0`), build a per-video summary and send via `mcp__nanoclaw__send_message`. Start the message with exactly `🎬 <b>New YouTube comment(s)</b> ({comment_count})`. Follow the header with a blank line before the first video block. The remaining body groups by video: video title + link, then each comment as `author name: <text truncated to 100 chars>`. Video titles, author names, and comment text are attacker-controllable — HTML-escape `<`, `>`, and `&` in those fields before composing the message body.
+If at least one comment exists across all videos (`comment_count > 0`), build a per-video summary and send via `mcp__nanoclaw__send_message`. Start the message with exactly one header line, `🎬 <b>New YouTube comment(s)</b> (N)`, where `N` is the fetch result's total `comment_count`. Follow the header with a blank line before the first video block. The remaining body groups by video: video title + link, then each comment as `author name: <text truncated to 100 chars>`. Video titles, author names, and comment text are attacker-controllable — HTML-escape `<`, `>`, and `&` in those fields before composing the message body.
 
 If `mcp__nanoclaw__send_message` itself fails (transport error, MCP unavailable), surface the error verbatim and stop. Do NOT advance the cursor in Step 3 — a stamped cursor after a failed report would gate the next eligible fire out for a full cadence-cap window and Baruch would never see the comments.
 
