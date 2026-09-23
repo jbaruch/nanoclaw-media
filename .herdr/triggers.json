@@ -6,6 +6,7 @@
   "package_change_lines": 400,
   "trust_boundary_paths": [
     ".github/workflows/*",
+    ".github/fleet-review-enabled",
     "skills/audible-backup/*",
     "skills/check-watchlist/*",
     "skills/entertainment-sync/*",
