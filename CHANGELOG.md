@@ -1,5 +1,9 @@
 # Changelog
 
+### Move entertainment-sync to Sonnet 5.5
+
+`entertainment-sync` runs on `claude-sonnet-5-5` (was `claude-sonnet-4-6`), which is cheaper per token. The Haiku skills are unchanged. Needs the agent image on claude-agent-sdk 0.3 (nanoclaw#974).
+
 ## 0.1.51 — 2026-08-18
 
 ### Chore — commit `tessl.json` as the dependency manifest it is
