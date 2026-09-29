@@ -2,7 +2,8 @@
 name: entertainment-sync
 description: "Weekly entertainment refresh: pulls Trakt watch history, checks watchlist for releases, runs show + book recs, syncs Audible purchases. Triggers: 'entertainment sync', 'weekly entertainment', 'sync trakt audible recs', 'refresh entertainment'."
 cadence: "0 10 * * 0"
-agentModel: "claude-sonnet-4-6"
+# agentModel renewal: no scanner tracks this pin. Re-check it on each new Claude model release and bump it in its own PR.
+agentModel: "claude-sonnet-5-5"
 script: "scripts/precheck-entertainment-sync.py"
 ---
 
