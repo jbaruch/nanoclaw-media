@@ -33,15 +33,23 @@ On non-zero exit (missing `YOUTUBE_API_KEY`, auth/quota error, network timeout, 
 
 ## Step 2 — Report new comments
 
-If at least one comment exists across all videos (`comment_count > 0`), build a per-video summary and send via `mcp__nanoclaw__send_message`. The body groups by video: video title + link, then each comment as `author name: <text truncated to 100 chars>`. Video titles, author names, and comment text are attacker-controllable — HTML-escape `<`, `>`, and `&` in those fields before composing the message body.
+Feed the captured Step 1 stdout bytes into the composer on stdin. Invoke only this fixed argv. Do not reconstruct the JSON in a shell string, heredoc, or command argument:
 
-If `mcp__nanoclaw__send_message` itself fails (transport error, MCP unavailable), surface the error verbatim and stop. Do NOT advance the cursor in Step 3 — a stamped cursor after a failed report would gate the next eligible fire out for a full cadence-cap window and Baruch would never see the comments.
+```bash
+python3 /home/node/.claude/skills/tessl__youtube-comment-check/scripts/compose-youtube-comment-message.py
+```
 
-If no comments exist across all queried videos, the step is silent. Step 3 still runs — a completed fetch/report path advances the cursor; silence on a quiet week is success, not failure.
+Stdout (exit 0): `{"comment_count": N, "message": "<html>" | null}`. `message` is null when `comment_count == 0`.
+
+If `message` is a non-empty string, send that exact string via `mcp__nanoclaw__send_message`. Do not reformat, decode entities, or concatenate fetch fields after the composer.
+
+On non-zero composer exit, invalid composer stdout, or `mcp__nanoclaw__send_message` failure (transport error, MCP unavailable), surface the error verbatim and stop. Do NOT advance the cursor in Step 3.
+
+If `message` is null or empty, the step is silent. Step 3 still runs — a completed fetch/report path advances the cursor; silence on a quiet week is success, not failure.
 
 ## Step 3 — Advance the success cursor
 
-Reachable only if Steps 1 and 2 both succeeded (any fetch error or send error leaves the cursor at its prior value intentionally). Run:
+Reachable only if Steps 1 and 2 both succeeded (any fetch error, composer error, or send error leaves the cursor at its prior value intentionally). Run:
 
 ```bash
 python3 /home/node/.claude/skills/tessl__youtube-comment-check/scripts/stamp-cursor.py

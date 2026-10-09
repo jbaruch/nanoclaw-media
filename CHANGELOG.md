@@ -1,5 +1,11 @@
 # Changelog
 
+### Fixed — identify YouTube comment notifications at a glance (#77)
+
+`youtube-comment-check` now starts every non-empty digest with `🎬 <b>New YouTube comment(s)</b> (N)` and a blank line before the first video block. The total count in the header makes the notification recognizable without changing comment fetching, per-video grouping, or HTML-escaping of untrusted fields.
+
+Digest composition moved into `skills/youtube-comment-check/scripts/compose-youtube-comment-message.py`. The same fetch JSON always produces the same header, count, grouping, 100-code-point truncation, and HTML-escaping of title/author/text (`<`, `>`, `&`). Composer failures surface on stderr and leave the success cursor unstamped. Skill Step 2 keeps the composer/send contract and drops the em-dash justification that previously sat next to the escaping directive.
+
 ## 0.1.58 — 2026-09-29
 
 ### Move entertainment-sync to Sonnet 5.5
