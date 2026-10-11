@@ -6,6 +6,8 @@
 
 Digest composition moved into `skills/youtube-comment-check/scripts/compose-youtube-comment-message.py`. The same fetch JSON always produces the same header, count, grouping, 100-code-point truncation, and HTML-escaping of title/author/text (`<`, `>`, `&`). Composer failures surface on stderr and leave the success cursor unstamped. Skill Step 2 keeps the composer/send contract and drops the em-dash justification that previously sat next to the escaping directive.
 
+`prepare-youtube-comment-message.py` now owns the executable fetch-to-composer boundary. It invokes both scripts with fixed argument vectors, passes fetch stdout to composer stdin byte-for-byte without shell interpolation, and emits no sendable payload when either process fails. The skill sends only after that combined step succeeds and stamps only after a quiet result or successful send.
+
 ## 0.1.58 — 2026-09-29
 
 ### Move entertainment-sync to Sonnet 5.5

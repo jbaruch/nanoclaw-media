@@ -1,13 +1,14 @@
-"""Outcome tests for youtube-comment-check digest composition.
+"""Outcome tests for youtube-comment-check preparation and composition.
 
-Invokes `compose-youtube-comment-message.py` as a subprocess with
-`shell=False` and the fetch-result JSON on stdin. Assertions cover the
-rendered message, quiet path, and fail-closed diagnostics — not SKILL.md
-prose order.
+Invokes the composer and the executable fetch-to-composer handoff.
+Assertions cover rendered output, byte preservation, quiet behavior, and
+fail-closed diagnostics rather than using SKILL.md prose as the digest
+oracle.
 """
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import subprocess
 import sys
@@ -15,8 +16,23 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 COMPOSER = REPO_ROOT / "skills/youtube-comment-check/scripts/compose-youtube-comment-message.py"
+HANDOFF = REPO_ROOT / "skills/youtube-comment-check/scripts/prepare-youtube-comment-message.py"
 SKILL_PATH = REPO_ROOT / "skills/youtube-comment-check/SKILL.md"
 SENTINEL_NAME = "composer-did-not-execute"
+
+
+def _load_handoff():
+    spec = importlib.util.spec_from_file_location("youtube_comment_handoff_under_test", HANDOFF)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"cannot load {HANDOFF}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def _write_script(path: Path, body: str) -> None:
+    path.write_text("#!/usr/bin/env python3\n" + body, encoding="utf-8")
 
 
 def _run(
@@ -281,17 +297,110 @@ def test_invalid_shapes_name_path_and_omit_raw_values() -> None:
             assert dumped not in proc.stderr
 
 
-def test_skill_step2_invokes_composer_and_routes_nonempty_message() -> None:
+def test_handoff_passes_fetch_stdout_bytes_to_composer(tmp_path: Path) -> None:
+    handoff = _load_handoff()
+    fetch = tmp_path / "fetch.py"
+    inspect_stdin = tmp_path / "inspect-stdin.py"
+    raw = '{"comment_count":1,"videos":[],"text":"€ ` $() ; & < >\\n"}\n'.encode()
+    _write_script(fetch, f"import sys\nsys.stdout.buffer.write({raw!r})\n")
+    _write_script(
+        inspect_stdin,
+        "import json\n"
+        "import sys\n"
+        "data = sys.stdin.buffer.read()\n"
+        "sys.stdout.write(json.dumps({'hex': data.hex()}) + '\\n')\n",
+    )
+
+    result = handoff.handoff(
+        (sys.executable, str(fetch)),
+        (sys.executable, str(inspect_stdin)),
+    )
+
+    assert result.returncode == 0
+    assert result.stderr == b""
+    assert json.loads(result.stdout) == {"hex": raw.hex()}
+
+
+def test_handoff_success_returns_exact_composer_output(tmp_path: Path) -> None:
+    handoff = _load_handoff()
+    fetch = tmp_path / "fetch.py"
+    fixture = _two_video_three_comment()
+    raw = (json.dumps(fixture, ensure_ascii=False) + "\n").encode()
+    _write_script(fetch, f"import sys\nsys.stdout.buffer.write({raw!r})\n")
+
+    result = handoff.handoff(
+        (sys.executable, str(fetch)),
+        (sys.executable, str(COMPOSER)),
+    )
+    composed = _run(fixture)
+
+    assert result.returncode == 0
+    assert result.stderr == b""
+    assert composed.returncode == 0
+    assert result.stdout == composed.stdout.encode()
+
+
+def test_fetch_failure_emits_no_sendable_payload_or_stamp(tmp_path: Path) -> None:
+    handoff = _load_handoff()
+    fetch = tmp_path / "fetch.py"
+    composer = tmp_path / "composer.py"
+    composer_ran = tmp_path / "composer-ran"
+    cursor = tmp_path / "cursor.json"
+    _write_script(fetch, "import sys\nsys.stderr.write('fetch failed\\n')\nsys.exit(7)\n")
+    _write_script(composer, f"from pathlib import Path\nPath({str(composer_ran)!r}).touch()\n")
+
+    result = handoff.handoff(
+        (sys.executable, str(fetch)),
+        (sys.executable, str(composer)),
+    )
+
+    assert result.returncode == 7
+    assert result.stdout == b""
+    assert result.stderr == b"fetch failed\n"
+    assert not composer_ran.exists()
+    assert not cursor.exists()
+
+
+def test_composer_failure_emits_no_sendable_payload_or_stamp(tmp_path: Path) -> None:
+    handoff = _load_handoff()
+    fetch = tmp_path / "fetch.py"
+    composer = tmp_path / "composer.py"
+    cursor = tmp_path / "cursor.json"
+    _write_script(fetch, "import sys\nsys.stdout.write('{bad json')\n")
+    _write_script(
+        composer,
+        "import sys\n"
+        "assert sys.stdin.buffer.read() == b'{bad json'\n"
+        "sys.stderr.write('compose failed\\n')\n"
+        "sys.exit(9)\n",
+    )
+
+    result = handoff.handoff(
+        (sys.executable, str(fetch)),
+        (sys.executable, str(composer)),
+    )
+
+    assert result.returncode == 9
+    assert result.stdout == b""
+    assert result.stderr == b"compose failed\n"
+    assert not cursor.exists()
+
+
+def test_skill_runs_handoff_before_send_and_stamp() -> None:
     skill = SKILL_PATH.read_text(encoding="utf-8")
-    start = skill.index("## Step 2 — Report new comments")
-    end = skill.index("## Step 3 — Advance the success cursor", start)
-    step2 = skill[start:end]
+    step1_start = skill.index("## Step 1 — Prepare recent comments")
+    step2_start = skill.index("## Step 2 — Report new comments", step1_start)
+    step1 = skill[step1_start:step2_start]
+    end = skill.index("## Step 3 — Advance the success cursor", step2_start)
+    step2 = skill[step2_start:end]
     step3 = skill[end : skill.index("## Step 4 — Silence", end)]
-    composer = "scripts/compose-youtube-comment-message.py"
-    assert composer in step2
+    handoff = "scripts/prepare-youtube-comment-message.py"
+    assert handoff in step1
+    assert "Do not send a digest or run Step 3" in step1
+    assert "scripts/compose-youtube-comment-message.py" not in step2
     assert "mcp__nanoclaw__send_message" in step2
     assert "message" in step2
-    assert composer not in step3
+    assert handoff not in step3
     assert "stamp-cursor.py" in step3
-    assert "Do NOT advance the cursor" in step2
+    assert "Do not run Step 3" in step2
     assert "🎬" not in step2
