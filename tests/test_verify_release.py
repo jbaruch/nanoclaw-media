@@ -49,14 +49,14 @@ from __future__ import annotations
 import json
 import os
 import urllib.error
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from email.message import Message
 
 import pytest
 
 # Frozen "now" for every test. Premiere dates in the fixtures are picked
 # relative to this instant, never to the real clock.
-_FROZEN_NOW = datetime(2026, 8, 17, 9, 30, tzinfo=timezone.utc)
+_FROZEN_NOW = datetime(2026, 8, 17, 9, 30, tzinfo=UTC)
 _TODAY = date(2026, 8, 17)
 _API_BASE = "https://tvmaze.test"
 

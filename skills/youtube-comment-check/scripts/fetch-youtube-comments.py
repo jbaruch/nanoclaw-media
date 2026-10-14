@@ -48,7 +48,7 @@ import sys
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 # rstrip the trailing slash so the `{API_BASE}/{path}` join never doubles.
@@ -111,7 +111,7 @@ def _get(path: str, params: dict, api_key: str) -> dict:
 def _utcnow() -> datetime:
     """Current UTC time; the single clock read, split out so tests can
     freeze it (coding-policy testing-standards: control the clock)."""
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def _window_days_from_cursor(

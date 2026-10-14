@@ -36,7 +36,7 @@ import importlib.util
 import json
 import os
 import subprocess
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -46,7 +46,7 @@ SCRIPT_REL = "skills/check-watchlist/scripts/check-watchlist-precheck.py"
 
 # Frozen clock matching the jbaruch/nanoclaw-media#2 repro (verified
 # 2026-06-12). LEAD is 7 days, so the cutoff is 2026-06-19.
-NOW = datetime(2026, 6, 12, tzinfo=timezone.utc)
+NOW = datetime(2026, 6, 12, tzinfo=UTC)
 _TODAY = NOW.date()
 # Fuzzy-format fixtures are built from the frozen reference's year, and
 # dated ones from offsets against it, so no fixture is a future literal
