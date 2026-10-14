@@ -20,7 +20,7 @@ import importlib.util
 import json
 import threading
 import urllib.parse
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import cast
@@ -34,7 +34,7 @@ CHANNEL = "UCZ8-VX2SiAIBE7guw7NG-Sg"
 
 # Fixed reference "now" — a past date, never the real clock
 # (coding-policy testing-standards: control the clock).
-FROZEN_NOW = datetime(2026, 6, 15, 12, 0, 0, tzinfo=timezone.utc)
+FROZEN_NOW = datetime(2026, 6, 15, 12, 0, 0, tzinfo=UTC)
 
 
 def _load():

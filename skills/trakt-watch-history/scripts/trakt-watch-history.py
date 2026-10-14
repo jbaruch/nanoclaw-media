@@ -45,7 +45,7 @@ import os
 import sys
 import urllib.error
 import urllib.request
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import NoReturn
 
 TIMEOUT_SECONDS = 30
@@ -283,7 +283,7 @@ def main():
             "total_movies": len(movies),
             "rated": len(ratings),
         },
-        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "fetched_at": datetime.now(UTC).isoformat(),
     }
 
     _write_record(out_path, result)

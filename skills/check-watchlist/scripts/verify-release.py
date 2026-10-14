@@ -110,7 +110,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -552,7 +552,7 @@ def _write_watchlist(path: Path, payload: Any) -> None:
 def main() -> int:
     watchlist_path = Path(os.environ.get("CHECK_WATCHLIST_PATH", DEFAULT_WATCHLIST_PATH))
     base_url = os.environ.get("TVMAZE_API_BASE", DEFAULT_API_BASE).rstrip("/")
-    now_utc = datetime.now(timezone.utc)
+    now_utc = datetime.now(UTC)
 
     try:
         text = watchlist_path.read_text(encoding="utf-8")

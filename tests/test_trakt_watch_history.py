@@ -42,10 +42,10 @@ scratch directory.
 import io
 import json
 import urllib.error
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from email.message import Message
 
-_FROZEN_NOW = datetime(2026, 4, 30, 12, 0, 0, tzinfo=timezone.utc)
+_FROZEN_NOW = datetime(2026, 4, 30, 12, 0, 0, tzinfo=UTC)
 
 
 def _make_frozen_datetime(real_datetime):

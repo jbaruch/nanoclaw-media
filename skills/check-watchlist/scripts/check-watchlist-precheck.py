@@ -80,7 +80,7 @@ import json
 import os
 import re
 import sys
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 DEFAULT_WATCHLIST_PATH = "/workspace/group/watchlist.json"
@@ -274,7 +274,7 @@ def decide(now_utc: datetime, watchlist_path: Path) -> dict:
 
 def main() -> int:
     watchlist_path = Path(os.environ.get("CHECK_WATCHLIST_PATH", DEFAULT_WATCHLIST_PATH))
-    now_utc = datetime.now(timezone.utc)
+    now_utc = datetime.now(UTC)
     payload = decide(now_utc, watchlist_path)
     sys.stdout.write(json.dumps(payload) + "\n")
     return 0
