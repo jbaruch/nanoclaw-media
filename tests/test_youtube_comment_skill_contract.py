@@ -404,3 +404,36 @@ def test_skill_runs_handoff_before_send_and_stamp() -> None:
     assert "stamp-cursor.py" in step3
     assert "Do not run Step 3" in step2
     assert "🎬" not in step2
+
+
+def test_fetcher_reads_the_overridden_cursor(monkeypatch, tmp_path: Path) -> None:
+    """#82 review: the YOUTUBE_COMMENT_CHECK_CURSOR override reaches the
+    fetcher, so it reads the same cursor Step 3 stamps."""
+    handoff = _load_handoff()
+    cursor = tmp_path / "cursor.json"
+    monkeypatch.setenv("YOUTUBE_COMMENT_CHECK_CURSOR", str(cursor))
+    command = handoff.build_fetch_command(handoff.resolve_cursor_path())
+    assert command[command.index("--cursor") + 1] == str(cursor)
+
+
+def test_fetcher_defaults_to_the_documented_cursor(monkeypatch) -> None:
+    handoff = _load_handoff()
+    monkeypatch.delenv("YOUTUBE_COMMENT_CHECK_CURSOR", raising=False)
+    command = handoff.build_fetch_command(handoff.resolve_cursor_path())
+    assert command[command.index("--cursor") + 1] == (
+        "/workspace/group/state/youtube-comment-check-cursor.json"
+    )
+
+
+def test_silent_child_failure_names_status_and_next_step(tmp_path: Path) -> None:
+    """#82 review: a child that dies without stderr still yields an
+    actionable diagnostic carrying its exit status."""
+    handoff = _load_handoff()
+    silent = tmp_path / "silent.py"
+    silent.write_text("import sys\nsys.exit(7)\n", encoding="utf-8")
+    result = handoff.handoff((sys.executable, str(silent)), (sys.executable, "-c", "pass"))
+    assert result.returncode == 7
+    assert result.stdout == b""
+    message = result.stderr.decode()
+    assert "status 7" in message
+    assert "retry the check" in message

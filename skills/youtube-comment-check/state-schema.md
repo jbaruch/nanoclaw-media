@@ -10,7 +10,9 @@ Per `coding-policy: stateful-artifacts`: every stateful artifact ships a schema 
 
 `tessl__youtube-comment-check` (this skill). The cursor is written exclusively by `scripts/stamp-cursor.py`. No other skill writes it.
 
-## Reader
+## Readers
+
+`scripts/fetch-youtube-comments.py` reads `last_run` as the lower bound of the comment window. `scripts/prepare-youtube-comment-message.py` hands it the same path the writer stamps, `YOUTUBE_COMMENT_CHECK_CURSOR` override included.
 
 `scripts/precheck-youtube-comment-check.py` (this skill, but reader-not-writer). Per the rule, the reader does NOT migrate; on encountering an unsupported `schema_version`, it treats the row as "no usable prior state" (fail-open: wake the agent so the next stamp restores a current cursor).
 

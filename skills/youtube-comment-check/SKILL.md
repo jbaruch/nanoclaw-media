@@ -29,13 +29,16 @@ Stdout (exit 0): `{"comment_count": N, "message": "<html>" | null}`. `message` i
 
 On non-zero exit, surface the script's stderr verbatim via `mcp__nanoclaw__send_message` and stop. Do not send a digest or run Step 3.
 
+On exit 0, proceed immediately to Step 2.
+
 ## Step 2 — Report new comments
 
-Parse the Step 1 stdout object. If `message` is a non-empty string, send that exact string via `mcp__nanoclaw__send_message`. Do not reformat or decode it.
+Parse the Step 1 stdout object. Exactly two shapes are valid:
 
-On invalid Step 1 stdout or `mcp__nanoclaw__send_message` failure, surface the error verbatim and stop. Do not run Step 3.
+- `message` is a non-empty string and `comment_count` is at least 1: send that exact string via `mcp__nanoclaw__send_message`. Do not reformat or decode it. After a successful send, proceed immediately to Step 3.
+- `message` is null and `comment_count` is 0: do not send. Proceed immediately to Step 3.
 
-If `message` is null or empty, do not send. Proceed immediately to Step 3.
+Anything else is invalid Step 1 stdout, an empty-string `message` or a count that disagrees with `message` included. On invalid stdout or a `mcp__nanoclaw__send_message` failure, surface the error verbatim and stop. Do not run Step 3.
 
 ## Step 3 — Advance the success cursor
 

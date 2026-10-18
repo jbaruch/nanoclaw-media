@@ -14,6 +14,7 @@ non-zero exit.
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from collections.abc import Sequence
@@ -21,18 +22,34 @@ from dataclasses import dataclass
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-FETCH_COMMAND = (
-    sys.executable,
-    str(SCRIPT_DIR / "fetch-youtube-comments.py"),
-    "--channel-id",
-    "UCZ8-VX2SiAIBE7guw7NG-Sg",
-    "--days",
-    "7",
-    "--cursor",
-    "/workspace/group/state/youtube-comment-check-cursor.json",
-    "--max-days",
-    "35",
-)
+# Same cursor contract as the precheck and stamp-cursor.py (state-schema.md):
+# the env override must reach the fetcher, or it reads a different cursor
+# than the one Step 3 stamps.
+DEFAULT_CURSOR_PATH = "/workspace/group/state/youtube-comment-check-cursor.json"
+CURSOR_ENV = "YOUTUBE_COMMENT_CHECK_CURSOR"
+
+
+def build_fetch_command(cursor_path: str) -> tuple[str, ...]:
+    """Fixed fetcher argv, reading the given cursor."""
+    return (
+        sys.executable,
+        str(SCRIPT_DIR / "fetch-youtube-comments.py"),
+        "--channel-id",
+        "UCZ8-VX2SiAIBE7guw7NG-Sg",
+        "--days",
+        "7",
+        "--cursor",
+        cursor_path,
+        "--max-days",
+        "35",
+    )
+
+
+def resolve_cursor_path() -> str:
+    """The cursor path the precheck and stamp-cursor.py also resolve."""
+    return os.environ.get(CURSOR_ENV, DEFAULT_CURSOR_PATH)
+
+
 COMPOSER_COMMAND = (
     sys.executable,
     str(SCRIPT_DIR / "compose-youtube-comment-message.py"),
@@ -51,9 +68,16 @@ class HandoffResult:
 def _child_failure(stage: str, returncode: int, stderr: bytes) -> HandoffResult:
     diagnostic = stderr
     if not diagnostic:
-        diagnostic = (
-            f"prepare-youtube-comment-message: {stage} exited without a diagnostic\n".encode()
+        script = (
+            "fetch-youtube-comments.py"
+            if stage == "fetcher"
+            else "compose-youtube-comment-message.py"
         )
+        diagnostic = (
+            f"prepare-youtube-comment-message: {stage} exited with status {returncode} and no "
+            f"diagnostic — verify {SCRIPT_DIR / script} is installed and runs "
+            "(reinstall jbaruch/nanoclaw-media if it is missing), then retry the check\n"
+        ).encode()
     return HandoffResult(returncode=returncode or 1, stdout=b"", stderr=diagnostic)
 
 
@@ -94,7 +118,7 @@ def handoff(fetch_command: Sequence[str], composer_command: Sequence[str]) -> Ha
 
 
 def main() -> int:
-    result = handoff(FETCH_COMMAND, COMPOSER_COMMAND)
+    result = handoff(build_fetch_command(resolve_cursor_path()), COMPOSER_COMMAND)
     sys.stdout.buffer.write(result.stdout)
     sys.stderr.buffer.write(result.stderr)
     return result.returncode
