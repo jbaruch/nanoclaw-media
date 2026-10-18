@@ -17,7 +17,7 @@ from __future__ import annotations
 import json
 import os
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 # 6d, not the 168h weekly cron interval: the cursor stamps at run completion,
@@ -135,7 +135,7 @@ def decide(now_utc: datetime, cursor_path: Path) -> dict:
 
 def main() -> int:
     cursor_path = Path(os.environ.get("ENTERTAINMENT_SYNC_CURSOR", DEFAULT_CURSOR_PATH))
-    now_utc = datetime.now(timezone.utc)
+    now_utc = datetime.now(UTC)
     payload = decide(now_utc, cursor_path)
     sys.stdout.write(json.dumps(payload) + "\n")
     return 0

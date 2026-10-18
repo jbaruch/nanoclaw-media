@@ -7,7 +7,7 @@ import json
 import os
 import stat
 import subprocess
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -30,7 +30,7 @@ def stamp_module():
 
 def test_stamp_writes_supported_schema_and_utc_iso(stamp_module, tmp_path):
     cursor = tmp_path / "cursor.json"
-    now = datetime(2026, 5, 2, 3, 14, 7, tzinfo=timezone.utc)
+    now = datetime(2026, 5, 2, 3, 14, 7, tzinfo=UTC)
     payload = stamp_module.stamp(cursor, now)
     assert payload["status"] == "stamped"
     assert payload["last_run"] == "2026-05-02T03:14:07Z"
@@ -40,21 +40,21 @@ def test_stamp_writes_supported_schema_and_utc_iso(stamp_module, tmp_path):
 
 def test_stamp_creates_parent_dirs(stamp_module, tmp_path):
     cursor = tmp_path / "nested" / "cursor.json"
-    stamp_module.stamp(cursor, datetime(2026, 5, 2, tzinfo=timezone.utc))
+    stamp_module.stamp(cursor, datetime(2026, 5, 2, tzinfo=UTC))
     assert cursor.exists()
 
 
 def test_stamp_overwrites_existing_cursor(stamp_module, tmp_path):
     cursor = tmp_path / "cursor.json"
     cursor.write_text(json.dumps({"schema_version": 1, "last_run": "2026-04-23T01:00:00Z"}))
-    stamp_module.stamp(cursor, datetime(2026, 5, 2, 3, 0, tzinfo=timezone.utc))
+    stamp_module.stamp(cursor, datetime(2026, 5, 2, 3, 0, tzinfo=UTC))
     on_disk = json.loads(cursor.read_text())
     assert on_disk["last_run"] == "2026-05-02T03:00:00Z"
 
 
 def test_stamp_leaves_no_tempfile_debris(stamp_module, tmp_path):
     cursor = tmp_path / "cursor.json"
-    stamp_module.stamp(cursor, datetime(2026, 5, 2, tzinfo=timezone.utc))
+    stamp_module.stamp(cursor, datetime(2026, 5, 2, tzinfo=UTC))
     assert list(tmp_path.glob(".cursor.json.*.tmp")) == []
 
 
@@ -62,7 +62,7 @@ def test_stamp_preserves_existing_file_mode(stamp_module, tmp_path):
     cursor = tmp_path / "cursor.json"
     cursor.write_text(json.dumps({"schema_version": 1, "last_run": "2026-04-23T00:00:00Z"}))
     os.chmod(cursor, 0o600)
-    stamp_module.stamp(cursor, datetime(2026, 5, 2, 3, 0, tzinfo=timezone.utc))
+    stamp_module.stamp(cursor, datetime(2026, 5, 2, 3, 0, tzinfo=UTC))
     assert stat.S_IMODE(os.stat(cursor).st_mode) == 0o600
 
 

@@ -28,7 +28,7 @@ import json
 import os
 import sys
 import tempfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 DEFAULT_CURSOR_PATH = "/workspace/group/state/youtube-comment-check-cursor.json"
@@ -96,7 +96,7 @@ def main() -> int:
     args = parser.parse_args()
 
     cursor_path = Path(args.cursor)
-    now_utc = datetime.now(timezone.utc)
+    now_utc = datetime.now(UTC)
 
     try:
         payload = stamp(cursor_path, now_utc)
