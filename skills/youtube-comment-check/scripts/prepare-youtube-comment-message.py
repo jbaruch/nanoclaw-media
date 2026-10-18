@@ -65,20 +65,32 @@ class HandoffResult:
     stderr: bytes
 
 
+def _remedy(stage: str) -> str:
+    script = (
+        "fetch-youtube-comments.py" if stage == "fetcher" else "compose-youtube-comment-message.py"
+    )
+    return (
+        f"verify {SCRIPT_DIR / script} is installed and runs "
+        "(reinstall jbaruch/nanoclaw-media if it is missing), then retry the check"
+    )
+
+
 def _child_failure(stage: str, returncode: int, stderr: bytes) -> HandoffResult:
     diagnostic = stderr
     if not diagnostic:
-        script = (
-            "fetch-youtube-comments.py"
-            if stage == "fetcher"
-            else "compose-youtube-comment-message.py"
-        )
         diagnostic = (
             f"prepare-youtube-comment-message: {stage} exited with status {returncode} and no "
-            f"diagnostic — verify {SCRIPT_DIR / script} is installed and runs "
-            "(reinstall jbaruch/nanoclaw-media if it is missing), then retry the check\n"
+            f"diagnostic — {_remedy(stage)}\n"
         ).encode()
     return HandoffResult(returncode=returncode or 1, stdout=b"", stderr=diagnostic)
+
+
+def _launch_failure(stage: str, exc: OSError) -> HandoffResult:
+    """The child could not start at all: say why and what to do."""
+    message = (
+        f"prepare-youtube-comment-message: could not start the {stage}: {exc} — {_remedy(stage)}\n"
+    )
+    return HandoffResult(returncode=2, stdout=b"", stderr=message.encode())
 
 
 def handoff(fetch_command: Sequence[str], composer_command: Sequence[str]) -> HandoffResult:
@@ -91,7 +103,7 @@ def handoff(fetch_command: Sequence[str], composer_command: Sequence[str]) -> Ha
             shell=False,
         )
     except OSError as exc:
-        return _child_failure("fetcher", 2, f"prepare-youtube-comment-message: {exc}\n".encode())
+        return _launch_failure("fetcher", exc)
 
     if fetched.returncode != 0:
         return _child_failure("fetcher", fetched.returncode, fetched.stderr)
@@ -105,7 +117,7 @@ def handoff(fetch_command: Sequence[str], composer_command: Sequence[str]) -> Ha
             shell=False,
         )
     except OSError as exc:
-        return _child_failure("composer", 2, f"prepare-youtube-comment-message: {exc}\n".encode())
+        return _launch_failure("composer", exc)
 
     if composed.returncode != 0:
         return _child_failure("composer", composed.returncode, composed.stderr)

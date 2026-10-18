@@ -437,3 +437,15 @@ def test_silent_child_failure_names_status_and_next_step(tmp_path: Path) -> None
     message = result.stderr.decode()
     assert "status 7" in message
     assert "retry the check" in message
+
+
+def test_unlaunchable_child_names_the_remedy(tmp_path: Path) -> None:
+    """#82 review: an OSError launching a child also tells the operator what to do."""
+    handoff = _load_handoff()
+    missing = str(tmp_path / "no-such-interpreter")
+    result = handoff.handoff((missing,), (sys.executable, "-c", "pass"))
+    assert result.returncode == 2
+    assert result.stdout == b""
+    message = result.stderr.decode()
+    assert "could not start the fetcher" in message
+    assert "retry the check" in message

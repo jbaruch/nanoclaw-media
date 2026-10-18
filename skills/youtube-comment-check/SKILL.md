@@ -17,7 +17,7 @@ The fire-time precheck (`scripts/precheck-youtube-comment-check.py`) gates wake-
 
 ## Step 1 — Prepare recent comments from Baruch's channel
 
-The preparation script uses the native YouTube Data API v3 (`YOUTUBE_API_KEY`). Channel ID: `UCZ8-VX2SiAIBE7guw7NG-Sg`. It fetches comment threads since the last successful run, falling back to 7 days on first run and bounding the lookback to 35 days:
+The preparation script uses the native YouTube Data API v3 (`YOUTUBE_API_KEY`) and fetches comment threads since the last successful run. Its fixed fetch window and channel live in `build_fetch_command()` in `scripts/prepare-youtube-comment-message.py`:
 
 ```bash
 python3 /home/node/.claude/skills/tessl__youtube-comment-check/scripts/prepare-youtube-comment-message.py
@@ -49,6 +49,8 @@ python3 /home/node/.claude/skills/tessl__youtube-comment-check/scripts/stamp-cur
 ```
 
 The script atomic-writes `/workspace/group/state/youtube-comment-check-cursor.json` with `{"schema_version": 1, "last_run": "<now UTC ISO Z>"}`. The precheck reads this file's `last_run` and gates on the cadence cap (value in the precheck). Stdout is `{"status": "stamped", "last_run": "<iso>", "cursor_path": "<path>"}`.
+
+On exit 0, proceed immediately to Step 4. On non-zero exit, surface the script's stderr verbatim via `mcp__nanoclaw__send_message` and stop.
 
 ## Step 4 — Silence
 
