@@ -12,8 +12,10 @@ Stdout, one JSON line:
     {"advance_cursor": bool, "internal": "<internal>entertainment-sync ran ...</internal>"}
 
 `advance_cursor` is true only when no step failed. `internal` is the exact
-line Step 7 emits: `clean` or `surfaced` for a full run, otherwise
+line Step 8 emits: `clean` or `surfaced` for a full run, otherwise
 `partial — ran <steps>; failed <steps>`.
+
+`--date` must be the canonical `YYYY-MM-DD` form.
 
 Exit 0 on success; 2 on a bad date or step list.
 """
@@ -22,10 +24,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from datetime import date
 
 STEPS = (1, 2, 3, 4, 5)
+CANONICAL_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 
 
 def summarize(run_date: str, failed: list[int], surfaced: bool) -> dict:
@@ -62,6 +66,8 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--surfaced", action="store_true")
     args = parser.parse_args(argv[1:])
     try:
+        if not CANONICAL_DATE.fullmatch(args.date):
+            raise ValueError(f"--date {args.date!r} is not YYYY-MM-DD")
         date.fromisoformat(args.date)
         failed = parse_failed(args.failed)
     except ValueError as exc:

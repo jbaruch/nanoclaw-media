@@ -11,9 +11,12 @@ Schema (v1):
       "last_run": "<UTC ISO with trailing Z>"
     }
 
+Stdout, one JSON line:
+    {"status": "stamped", "last_run": "<iso>", "cursor_path": "<path>"}
+
 Exit codes:
     0 — cursor stamped
-    2 — write failed; diagnostic on stderr
+    2 — write failed; diagnostic on stderr, nothing on stdout
 
 Per `coding-policy: stateful-artifacts`, this script is the OWNER of
 the cursor file: only it migrates shapes (bump `SUPPORTED_SCHEMA`,

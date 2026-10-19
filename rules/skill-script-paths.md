@@ -28,3 +28,4 @@ applyTo: "skills/**/SKILL.md — when a skill step runs one of this plugin's scr
 ## Regression Coverage
 
 - `tests/test_skill_script_paths.py` resolves every such path in every `SKILL.md` to a declared skill and a co-shipped script
+- The same test requires each target's docstring to name its stdout shape and exit codes

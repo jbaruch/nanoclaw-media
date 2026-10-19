@@ -7,6 +7,7 @@ at `skills/<name>/scripts/<script>` in this repository.
 
 from __future__ import annotations
 
+import ast
 import json
 import re
 from pathlib import Path
@@ -47,3 +48,14 @@ def test_script_path_names_a_declared_skill_and_a_co_shipped_script(caller, name
 def test_the_rule_is_declared_in_the_manifest():
     manifest = json.loads((REPO_ROOT / ".tessl-plugin/plugin.json").read_text())
     assert "rules/skill-script-paths.md" in manifest.get("rules", [])
+
+
+@pytest.mark.parametrize(
+    "name,script", sorted({(name, script) for _, name, script in _references()})
+)
+def test_each_target_documents_its_stdout_and_exit_codes(name, script):
+    """The rule makes each target's docstring its contract (rules/skill-script-paths.md)."""
+    source = (REPO_ROOT / "skills" / name / "scripts" / script).read_text()
+    doc = (ast.get_docstring(ast.parse(source)) or "").lower()
+    assert "stdout" in doc, f"skills/{name}/scripts/{script}: docstring names no stdout shape"
+    assert "exit" in doc, f"skills/{name}/scripts/{script}: docstring names no exit codes"

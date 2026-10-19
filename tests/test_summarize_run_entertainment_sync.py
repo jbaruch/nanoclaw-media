@@ -58,8 +58,14 @@ def test_failed_steps_are_sorted_and_deduplicated(summarize_run, capsys):
 
 @pytest.mark.parametrize(
     "args",
-    [["--date", "10/18/2026", "--failed", "none"], ["--date", "2026-10-18", "--failed", "6"]],
-    ids=["bad-date", "unknown-step"],
+    [
+        ["--date", "10/18/2026", "--failed", "none"],
+        ["--date", "20261018", "--failed", "none"],
+        ["--date", "2026-W42-7", "--failed", "none"],
+        ["--date", "2026-13-40", "--failed", "none"],
+        ["--date", "2026-10-18", "--failed", "6"],
+    ],
+    ids=["bad-date", "compact-date", "iso-week-date", "impossible-date", "unknown-step"],
 )
 def test_bad_input_exits_2(summarize_run, capsys, args):
     code, out, err = _run(summarize_run, capsys, *args)

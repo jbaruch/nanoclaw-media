@@ -15,6 +15,10 @@ Outputs a JSON summary to stdout: {appended, skipped_existing,
 skipped_failed, csv_total, books} — all fields present on every run,
 including no-op runs with zero eligible books.
 
+Exit 0 after printing the summary. Any failure (stdin that is not a JSON
+object, a CSV or lock-file I/O error) exits non-zero with Python's
+traceback on stderr and nothing on stdout.
+
 Concurrency: read-existing → check-new → append is wrapped in an advisory
 exclusive file lock (fcntl.flock) so two simultaneous runs can't both see the
 same "existing" set and double-write the same books.

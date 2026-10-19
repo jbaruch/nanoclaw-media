@@ -39,7 +39,7 @@ If invocation fails, surface verbatim via `mcp__nanoclaw__send_message` and mark
 
 ## Step 3 — Show recommendations
 
-Invoke `Skill(skill: "tessl__recommend-shows")` even when Step 1 failed: it retries the Trakt refresh itself and falls back to the cached `trakt-history.json` with a staleness note. Sends on good matches; silent otherwise.
+Invoke `Skill(skill: "tessl__recommend-shows")` even when Step 1 failed. Sends on good matches; silent otherwise.
 
 If invocation fails, surface via `mcp__nanoclaw__send_message` and mark Step 3 failed. Proceed to Step 4.
 
@@ -57,12 +57,15 @@ If invocation fails, surface via `mcp__nanoclaw__send_message` and mark Step 5 f
 
 ## Step 6 — Summarize the run
 
-Pass today's UTC date, the failed steps (comma list, or `none`) and whether any inner skill surfaced something:
+Run it with every step that ran cleanly:
 
 ```bash
 python3 /home/node/.claude/skills/tessl__entertainment-sync/scripts/summarize-run.py \
-  --date "$UTC_DATE" --failed "$FAILED_STEPS" [--surfaced]
+  --date "$(date -u +%F)" --failed none
 ```
+
+- Replace `none` with the failed step numbers as a comma list when any step failed, e.g. `--failed 1,3`
+- Append `--surfaced` when any inner skill sent the operator something
 
 Stdout: `{"advance_cursor": bool, "internal": "<internal>…</internal>"}`. Proceed to Step 7.
 

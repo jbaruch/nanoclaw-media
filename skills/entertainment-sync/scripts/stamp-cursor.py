@@ -1,5 +1,22 @@
 #!/usr/bin/env python3
-"""Stamp the success cursor for `tessl__entertainment-sync`."""
+"""Stamp the success cursor for `tessl__entertainment-sync`.
+
+Usage:
+    stamp-cursor.py [--cursor PATH]
+
+`--cursor` defaults to `$ENTERTAINMENT_SYNC_CURSOR`, else
+`/workspace/group/state/entertainment-sync-cursor.json`. The script
+atomic-writes the current UTC instant there:
+
+    {"schema_version": 1, "last_run": "<UTC ISO with trailing Z>"}
+
+Stdout, one JSON line:
+    {"status": "stamped", "last_run": "<iso>", "cursor_path": "<path>"}
+
+Exit codes:
+    0 — cursor stamped
+    2 — write failed; diagnostic on stderr, nothing on stdout
+"""
 
 from __future__ import annotations
 
