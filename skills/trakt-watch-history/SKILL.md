@@ -26,7 +26,7 @@ The script prints JSON (field names shown schematically, not literal JSON):
 }
 ```
 
-This skill owns the persisted `trakt-history.json` record shape. The versioned contract, field promises, and migration policy live in [state-schema.md](state-schema.md):
+This skill owns the persisted `trakt-history.json` record shape. The versioned contract, field promises, and migration policy live in:
 
 ```text
 skills/trakt-watch-history/state-schema.md
