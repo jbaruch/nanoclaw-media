@@ -4,6 +4,12 @@
 
 `entertainment-sync` stopped the whole run when Step 1's Trakt history fetch failed, so Steps 4 (Audible backup) and 5 (book recommendations), which never touch Trakt, were skipped too. Trakt has returned 401 every week since 2026-08-16, so for two months those steps ran only when the agent started them separately. A failed step is now surfaced and the run continues; only Step 3 (show recommendations), which reads Step 1's history, is skipped after a Trakt failure. The cursor still advances only when every step ran cleanly, so the next fire retries, and the final `<internal>` line lists which steps ran, failed and were skipped.
 
+## 0.1.66 — 2026-10-19
+
+### Fixed — Trakt history keeps every page and stops writing zero episode counts (#89)
+
+`trakt-watch-history.py` made one request per list, so the history stopped at the first page: the last good record held exactly 100 shows and 100 movies out of 345 shows. Every list (watched shows and movies, and both ratings lists) is now read page by page until Trakt's `X-Pagination-Page-Count` says it is the last page, or until an empty page when the header is absent (Trakt's effective page size can be below the requested limit), with a 100-page bound that fails loudly. `episodes_watched` was summed from a `seasons` array Trakt no longer returns by default: the watched-shows endpoint now sends season progress only for `extended=progress`, so every show recorded 0, which `recommend-shows` read as "barely watched". The request now asks for it, a show still without per-season progress records `null` (unknown), and the script names how many shows lacked it on stderr. The record moves to `schema_version` 2; `recommend-shows` accepts v1 and v2 and treats a v1 zero as unknown.
+
 ## 0.1.64 — 2026-10-18
 
 ### Fixed — identify YouTube comment notifications at a glance (#77)

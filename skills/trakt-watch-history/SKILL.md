@@ -18,7 +18,7 @@ python3 /home/node/.claude/skills/tessl__trakt-watch-history/scripts/trakt-watch
 The script prints JSON (field names shown schematically, not literal JSON):
 ```text
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "shows": [{"title", "year", "trakt_id", "slug", "episodes_watched", "last_watched", "rating"}],
   "movies": [{"title", "year", "trakt_id", "slug", "last_watched", "rating"}],
   "stats": {"total_shows", "total_movies", "rated"},
@@ -44,7 +44,7 @@ Branch on the result:
 
 Identify patterns from the returned data (no genre field in the schema — work with what's there first, layer genre inferences only where you're confident):
 
-- **Primary signal: ratings.** Prioritize titles rated 8+ / 10 as the "strong positive" set. Note rewatch signal from `episodes_watched` on shows (binge or revisit).
+- **Primary signal: ratings.** Prioritize titles rated 8+ / 10 as the "strong positive" set. Note rewatch signal from `episodes_watched` on shows (binge or revisit); a `null` count is unknown, not zero.
 - **Temporal signal: `last_watched` + `year`.** Recent entries vs. older ones, era clusters (e.g., run of 2000s titles), release-year patterns.
 - **Title/creator signal.** Look for repeating franchises, directors/creators you can identify from the titles, adaptations of the same source material.
 - **Genre, only where confident.** For titles you know well (`Breaking Bad` = crime/drama), you can layer a genre inference. For less-known titles, don't guess — note uncertainty instead of inventing a genre tag, and fall back to the rating/title/era signals above.

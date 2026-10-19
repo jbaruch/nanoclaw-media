@@ -60,10 +60,11 @@ def _make_frozen_datetime(real_datetime):
 
 
 class _FakeResponse:
-    def __init__(self, body):
+    def __init__(self, body, headers=None):
         if isinstance(body, str):
             body = body.encode("utf-8")
         self._body = body
+        self.headers = headers or {}
 
     def __enter__(self):
         return self
@@ -80,7 +81,8 @@ def _patch_urlopen(monkeypatch, payloads):
 
     `payloads` is a dict {url_substring: payload}. payload is a Python
     object (json-serialized), bytes/str (returned raw), or an Exception
-    instance (raised on call)."""
+    instance (raised on call). A list payload is served as page 1 of a
+    paged endpoint, followed by an empty page."""
 
     def _fake_urlopen(req, timeout=None):
         target = req.full_url if hasattr(req, "full_url") else str(req)
@@ -90,6 +92,9 @@ def _patch_urlopen(monkeypatch, payloads):
                     raise payload
                 if isinstance(payload, (bytes, str)):
                     return _FakeResponse(payload)
+                # A list is one page; the walk ends on the empty page after it.
+                if isinstance(payload, list) and "page=" in target and "page=1&" not in target:
+                    return _FakeResponse(json.dumps([]))
                 return _FakeResponse(json.dumps(payload))
         raise AssertionError(f"unexpected URL fetched: {target!r}")
 
@@ -438,3 +443,132 @@ def test_non_json_response_emits_preview(trakt_watch_history, monkeypatch, capsy
     payload = json.loads(out)
     assert "non-JSON response" in payload["error"]
     assert "preview=" in payload["error"]
+
+
+# ---------------------------------------------------------------------------
+# Pagination and per-season data (#89)
+# ---------------------------------------------------------------------------
+
+
+def _show(n: int, seasons=None) -> dict:
+    entry = {
+        "show": {"title": f"Show {n}", "year": 2020, "ids": {"trakt": n, "slug": f"show-{n}"}},
+        "last_watched_at": f"2026-01-{(n % 28) + 1:02d}T00:00:00.000Z",
+    }
+    if seasons is not None:
+        entry["seasons"] = seasons
+    return entry
+
+
+def _paged_urlopen(monkeypatch, pages_by_endpoint, *, with_count=True):
+    """Serve each endpoint's pages by the `page=` query; record every URL."""
+    fetched: list[str] = []
+
+    def _fake(req, timeout=None):
+        url = req.full_url
+        fetched.append(url)
+        for endpoint, pages in pages_by_endpoint.items():
+            if endpoint in url:
+                page = int(url.split("page=")[1].split("&")[0]) if "page=" in url else 1
+                headers = {"X-Pagination-Page-Count": str(len(pages))} if with_count else {}
+                return _FakeResponse(json.dumps(pages[page - 1]), headers)
+        raise AssertionError(f"unexpected URL fetched: {url!r}")
+
+    monkeypatch.setattr("urllib.request.urlopen", _fake)
+    return fetched
+
+
+def test_every_page_of_watched_shows_is_saved(trakt_watch_history, monkeypatch, capsys, tmp_path):
+    """#89: a 345-show history used to stop at the first 100."""
+    shows = [_show(n, seasons=[{"episodes": [{"number": 1}]}]) for n in range(1, 251)]
+    pages = [shows[0:100], shows[100:200], shows[200:250]]
+    fetched = _paged_urlopen(
+        monkeypatch,
+        {
+            "/users/me/watched/shows": pages,
+            "/users/me/watched/movies": [[]],
+            "/users/me/ratings/shows": [[]],
+            "/users/me/ratings/movies": [[]],
+        },
+    )
+    code, out, _, _ = _run(trakt_watch_history, monkeypatch, capsys, tmp_path)
+    assert code == 0
+    record = json.loads(out)
+    assert record["stats"]["total_shows"] == 250
+    assert sum("watched/shows" in url for url in fetched) == 3
+
+
+def test_without_a_page_count_only_an_empty_page_ends_the_walk(
+    trakt_watch_history, monkeypatch, capsys, tmp_path
+):
+    """#91 review: Trakt's effective page size can be below the requested
+    limit, so a short page is not the last one."""
+    shows = [_show(n, seasons=[]) for n in range(1, 91)]
+    fetched = _paged_urlopen(
+        monkeypatch,
+        {
+            "/users/me/watched/shows": [shows[0:50], shows[50:90], []],
+            "/users/me/watched/movies": [[]],
+            "/users/me/ratings/shows": [[]],
+            "/users/me/ratings/movies": [[]],
+        },
+        with_count=False,
+    )
+    code, out, _, _ = _run(trakt_watch_history, monkeypatch, capsys, tmp_path)
+    assert code == 0
+    assert json.loads(out)["stats"]["total_shows"] == 90
+    assert sum("watched/shows" in url for url in fetched) == 3
+
+
+def test_watched_shows_ask_for_season_progress(trakt_watch_history, monkeypatch, capsys, tmp_path):
+    """#91 review: Trakt omits season progress unless extended=progress is sent."""
+    fetched = _paged_urlopen(
+        monkeypatch,
+        {
+            "/users/me/watched/shows": [[]],
+            "/users/me/watched/movies": [[]],
+            "/users/me/ratings/shows": [[]],
+            "/users/me/ratings/movies": [[]],
+        },
+    )
+    code, _, _, _ = _run(trakt_watch_history, monkeypatch, capsys, tmp_path)
+    assert code == 0
+    shows_urls = [url for url in fetched if "watched/shows" in url]
+    assert shows_urls and all("extended=progress" in url for url in shows_urls)
+
+
+def test_missing_seasons_are_unknown_not_zero(trakt_watch_history, monkeypatch, capsys, tmp_path):
+    """#89: a show without per-season data has an unknown count, reported loudly."""
+    _patch_urlopen(
+        monkeypatch,
+        _all_endpoints(shows=[_show(1), _show(2, seasons=[{"episodes": [{}, {}]}])]),
+    )
+    code, out, err, _ = _run(trakt_watch_history, monkeypatch, capsys, tmp_path)
+    assert code == 0
+    counts = {s["slug"]: s["episodes_watched"] for s in json.loads(out)["shows"]}
+    assert counts == {"show-1": None, "show-2": 2}
+    assert "1 of 2 shows came back without per-season progress" in err
+
+
+def test_an_endless_page_count_is_refused(trakt_watch_history, monkeypatch, capsys, tmp_path):
+    full = [_show(n, seasons=[]) for n in range(trakt_watch_history.PAGE_LIMIT)]
+
+    def _fake(req, timeout=None):
+        return _FakeResponse(json.dumps(full), {"X-Pagination-Page-Count": "100000"})
+
+    monkeypatch.setattr("urllib.request.urlopen", _fake)
+    code, out, _, _ = _run(trakt_watch_history, monkeypatch, capsys, tmp_path)
+    assert code == 1
+    error = json.loads(out)["error"]
+    assert "refusing an unbounded crawl" in error
+    assert "raise MAX_PAGES" in error
+
+
+def test_a_non_list_page_names_the_remedy(trakt_watch_history, monkeypatch, capsys, tmp_path):
+    def _fake(req, timeout=None):
+        return _FakeResponse(json.dumps({"unexpected": True}))
+
+    monkeypatch.setattr("urllib.request.urlopen", _fake)
+    code, out, _, _ = _run(trakt_watch_history, monkeypatch, capsys, tmp_path)
+    assert code == 1
+    assert "retry the fetch" in json.loads(out)["error"]
