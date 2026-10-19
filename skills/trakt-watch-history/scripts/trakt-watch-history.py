@@ -120,12 +120,21 @@ def api_get_all(path: str, headers: dict, extended: str | None = None) -> list:
             f"{path}?{query}page={page}&limit={PAGE_LIMIT}", headers
         )
         if not isinstance(data, list):
-            fail(f"Trakt API {path} page {page} returned {type(data).__name__}, not a list")
+            fail(
+                f"Trakt API {path} page {page} returned {type(data).__name__}, not a list — "
+                "retry the fetch; if it persists, Trakt or the OneCLI gateway changed the "
+                "response shape for this endpoint"
+            )
         items.extend(data)
         last = page >= page_count if page_count is not None else not data
         if last:
             return items
-    fail(f"Trakt API {path} has more than {MAX_PAGES} pages; refusing an unbounded crawl")
+    fail(
+        f"Trakt API {path} has more than {MAX_PAGES} pages; refusing an unbounded crawl — "
+        "check that the gateway preserves the page query parameter and the "
+        "X-Pagination-Page-Count header, or raise MAX_PAGES (and its tests) if the "
+        "account really holds that much history"
+    )
 
 
 def _page_count(value) -> int | None:

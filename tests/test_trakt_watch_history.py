@@ -559,4 +559,16 @@ def test_an_endless_page_count_is_refused(trakt_watch_history, monkeypatch, caps
     monkeypatch.setattr("urllib.request.urlopen", _fake)
     code, out, _, _ = _run(trakt_watch_history, monkeypatch, capsys, tmp_path)
     assert code == 1
-    assert "refusing an unbounded crawl" in json.loads(out)["error"]
+    error = json.loads(out)["error"]
+    assert "refusing an unbounded crawl" in error
+    assert "raise MAX_PAGES" in error
+
+
+def test_a_non_list_page_names_the_remedy(trakt_watch_history, monkeypatch, capsys, tmp_path):
+    def _fake(req, timeout=None):
+        return _FakeResponse(json.dumps({"unexpected": True}))
+
+    monkeypatch.setattr("urllib.request.urlopen", _fake)
+    code, out, _, _ = _run(trakt_watch_history, monkeypatch, capsys, tmp_path)
+    assert code == 1
+    assert "retry the fetch" in json.loads(out)["error"]
