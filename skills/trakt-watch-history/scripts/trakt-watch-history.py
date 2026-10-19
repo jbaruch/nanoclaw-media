@@ -35,8 +35,8 @@ Per-item `rating` is sourced from the Trakt ratings endpoints and
 attached by slug. No top-level ratings map is emitted; callers that
 need a slug -> rating lookup should build one from the items.
 
-On API/network/credentials failure, emits {"error": "..."} to stdout
-and exits 1 (leaving any existing record untouched) so the caller
+On API/network/credentials failure, emits {"error": "..."} to stdout,
+the same message on stderr, and exits 1 (leaving any existing record untouched) so the caller
 (trakt-watch-history / entertainment-sync Step 1) gets structured
 output instead of a stack trace.
 """
@@ -98,6 +98,7 @@ def fail(msg) -> NoReturn:
     # "Object of type None cannot be iterated." Runtime behavior
     # unchanged — sys.exit raises SystemExit either way.
     print(json.dumps({"error": msg}))
+    sys.stderr.write(f"trakt-watch-history: {msg}\n")
     sys.exit(1)
 
 

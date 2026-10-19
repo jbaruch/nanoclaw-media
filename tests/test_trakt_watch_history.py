@@ -343,11 +343,14 @@ def test_http_401_adds_gateway_reconnect_hint(trakt_watch_history, monkeypatch, 
     )
     _patch_urlopen(monkeypatch, {"/users/me/watched/shows": error})
 
-    code, out, _, _ = _run(trakt_watch_history, monkeypatch, capsys, tmp_path)
+    code, out, err, _ = _run(trakt_watch_history, monkeypatch, capsys, tmp_path)
     assert code == 1
     payload = json.loads(out)
     assert "HTTP 401" in payload["error"]
     assert "gateway" in payload["error"].lower()
+    # The same diagnostic reaches stderr for callers that read only stderr.
+    assert err.startswith("trakt-watch-history: ")
+    assert "HTTP 401" in err
 
 
 def test_error_does_not_clobber_existing_record(trakt_watch_history, monkeypatch, capsys, tmp_path):

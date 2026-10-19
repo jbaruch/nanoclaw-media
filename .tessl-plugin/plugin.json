@@ -11,5 +11,8 @@
     "skills/check-watchlist",
     "skills/youtube-comment-check",
     "skills/audible-backup"
+  ],
+  "rules": [
+    "rules/skill-script-paths.md"
   ]
 }

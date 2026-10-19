@@ -54,6 +54,12 @@ The skills read and write files under the shared `/workspace/group/` mount:
 
 Owner-uploaded files degrade gracefully when absent (ladder-fallback). Intra-cluster reads (`recommend-shows` ← `trakt-history.json`) resolve because all producing/consuming skills ship in this plugin.
 
+## Rules
+
+| Rule | Summary |
+|------|---------|
+| [skill-script-paths](rules/skill-script-paths.md) | A skill step runs this plugin's scripts at `/home/node/.claude/skills/tessl__<name>/scripts/<script>`; each path names a declared skill and a co-shipped script, and the script's docstring owns its contract. |
+
 ## Skills
 
 | Skill | Description |
