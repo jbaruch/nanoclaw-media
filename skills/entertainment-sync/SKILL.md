@@ -9,7 +9,9 @@ script: "scripts/precheck-entertainment-sync.py"
 
 # Entertainment Sync
 
-**Every step below is mandatory. Execute them in order. Do not skip, reorder, or abbreviate any step.**
+Process steps in order. Do not skip ahead.
+
+A failed step does not stop the run: surface it and continue. Only Step 3 depends on another step (Step 1's Trakt history) and is skipped when Step 1 fails. Track each step as ran, failed or skipped for Step 7.
 
 Run silently. Each inner skill handles its own surfacing. The wrapper adds no surfaces beyond cadence-cursor management.
 
@@ -25,35 +27,37 @@ python3 /home/node/.claude/skills/tessl__trakt-watch-history/scripts/trakt-watch
 
 Silent on success. Report on error (stdout `{"error": ...}` / non-zero exit) or `total_shows: 0` (if sync hasn't run yet, skip silently).
 
-If the script fails, surface its stdout/stderr verbatim via `mcp__nanoclaw__send_message`, then emit `<internal>entertainment-sync exited step-1: fetch-fail</internal>` as your final turn text and stop. Do NOT advance the cursor. Otherwise proceed to Step 2.
+If the script fails, surface its stdout/stderr verbatim via `mcp__nanoclaw__send_message`, mark Step 1 failed and Step 3 skipped, and proceed to Step 2. Otherwise mark Step 1 ran and proceed to Step 2.
 
 ## Step 2 — Check watchlist
 
 Invoke `Skill(skill: "tessl__check-watchlist")`. Inner skill notifies on released shows; silent otherwise.
 
-If invocation fails, surface verbatim via `mcp__nanoclaw__send_message`, then emit `<internal>entertainment-sync exited step-2: inner-skill-fail</internal>` as your final turn text and stop. Do NOT advance the cursor. Otherwise proceed to Step 3.
+If invocation fails, surface verbatim via `mcp__nanoclaw__send_message` and mark Step 2 failed. Proceed to Step 3.
 
 ## Step 3 — Show recommendations
 
+If Step 1 failed, skip this step and proceed to Step 4.
+
 Invoke `Skill(skill: "tessl__recommend-shows")`. Uses `trakt-history.json` from Step 1. Sends on good matches; silent otherwise.
 
-If invocation fails, surface via `mcp__nanoclaw__send_message`, then emit `<internal>entertainment-sync exited step-3: inner-skill-fail</internal>` as your final turn text and stop. Otherwise proceed to Step 4.
+If invocation fails, surface via `mcp__nanoclaw__send_message` and mark Step 3 failed. Proceed to Step 4.
 
 ## Step 4 — Audible backup
 
 Invoke `Skill(skill: "tessl__audible-backup")`. Inner skill reports new books or errors; silent otherwise.
 
-If invocation fails, surface via `mcp__nanoclaw__send_message`, then emit `<internal>entertainment-sync exited step-4: inner-skill-fail</internal>` as your final turn text and stop. Otherwise proceed to Step 5.
+If invocation fails, surface via `mcp__nanoclaw__send_message` and mark Step 4 failed. Proceed to Step 5.
 
 ## Step 5 — Book recommendations
 
 Invoke `Skill(skill: "tessl__recommend-books")`. Sends on good matches; silent otherwise.
 
-If invocation fails, surface via `mcp__nanoclaw__send_message`, then emit `<internal>entertainment-sync exited step-5: inner-skill-fail</internal>` as your final turn text and stop. Otherwise proceed to Step 6.
+If invocation fails, surface via `mcp__nanoclaw__send_message` and mark Step 5 failed. Proceed to Step 6.
 
 ## Step 6 — Advance the success cursor
 
-Reachable only if Steps 1-5 all succeeded. Run:
+Run only if Steps 1-5 all ran without failing; otherwise skip to Step 7, leaving the cursor so the next fire retries. Run:
 
 ```bash
 python3 /home/node/.claude/skills/tessl__entertainment-sync/scripts/stamp-cursor.py
@@ -63,4 +67,9 @@ Atomic-writes `/workspace/group/state/entertainment-sync-cursor.json` with `{"sc
 
 ## Step 7 — Observable silence
 
-Emit exactly one `<internal>` line so the post-fire silent-success watchdog can read `task_run_logs.result` directly. Either `<internal>entertainment-sync ran <utc_date>: clean</internal>` (no inner skill surfaced) or `<internal>entertainment-sync ran <utc_date>: surfaced</internal>` (at least one did). `<utc_date>` is today's UTC date in `YYYY-MM-DD`. The wrapper adds no user-facing output. Finish here.
+Emit exactly one `<internal>` line so the post-fire silent-success watchdog can read `task_run_logs.result` directly. `<utc_date>` is today's UTC date in `YYYY-MM-DD`. The wrapper adds no user-facing output.
+
+- Every step ran: `<internal>entertainment-sync ran <utc_date>: clean</internal>` (no inner skill surfaced) or `<internal>entertainment-sync ran <utc_date>: surfaced</internal>` (at least one did).
+- Any step failed or was skipped: `<internal>entertainment-sync ran <utc_date>: partial — ran <steps>; failed <steps>; skipped <steps></internal>`, listing step numbers, `none` for an empty list.
+
+Finish here.
