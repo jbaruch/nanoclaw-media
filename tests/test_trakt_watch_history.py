@@ -81,7 +81,8 @@ def _patch_urlopen(monkeypatch, payloads):
 
     `payloads` is a dict {url_substring: payload}. payload is a Python
     object (json-serialized), bytes/str (returned raw), or an Exception
-    instance (raised on call)."""
+    instance (raised on call). A list payload is served as page 1 of a
+    paged endpoint, followed by an empty page."""
 
     def _fake_urlopen(req, timeout=None):
         target = req.full_url if hasattr(req, "full_url") else str(req)
@@ -91,6 +92,9 @@ def _patch_urlopen(monkeypatch, payloads):
                     raise payload
                 if isinstance(payload, (bytes, str)):
                     return _FakeResponse(payload)
+                # A list is one page; the walk ends on the empty page after it.
+                if isinstance(payload, list) and "page=" in target and "page=1&" not in target:
+                    return _FakeResponse(json.dumps([]))
                 return _FakeResponse(json.dumps(payload))
         raise AssertionError(f"unexpected URL fetched: {target!r}")
 
@@ -494,14 +498,16 @@ def test_every_page_of_watched_shows_is_saved(trakt_watch_history, monkeypatch, 
     assert sum("watched/shows" in url for url in fetched) == 3
 
 
-def test_a_short_page_ends_the_walk_without_a_page_count(
+def test_without_a_page_count_only_an_empty_page_ends_the_walk(
     trakt_watch_history, monkeypatch, capsys, tmp_path
 ):
-    shows = [_show(n, seasons=[]) for n in range(1, 131)]
+    """#91 review: Trakt's effective page size can be below the requested
+    limit, so a short page is not the last one."""
+    shows = [_show(n, seasons=[]) for n in range(1, 91)]
     fetched = _paged_urlopen(
         monkeypatch,
         {
-            "/users/me/watched/shows": [shows[0:100], shows[100:130]],
+            "/users/me/watched/shows": [shows[0:50], shows[50:90], []],
             "/users/me/watched/movies": [[]],
             "/users/me/ratings/shows": [[]],
             "/users/me/ratings/movies": [[]],
@@ -510,8 +516,25 @@ def test_a_short_page_ends_the_walk_without_a_page_count(
     )
     code, out, _, _ = _run(trakt_watch_history, monkeypatch, capsys, tmp_path)
     assert code == 0
-    assert json.loads(out)["stats"]["total_shows"] == 130
-    assert sum("watched/shows" in url for url in fetched) == 2
+    assert json.loads(out)["stats"]["total_shows"] == 90
+    assert sum("watched/shows" in url for url in fetched) == 3
+
+
+def test_watched_shows_ask_for_season_progress(trakt_watch_history, monkeypatch, capsys, tmp_path):
+    """#91 review: Trakt omits season progress unless extended=progress is sent."""
+    fetched = _paged_urlopen(
+        monkeypatch,
+        {
+            "/users/me/watched/shows": [[]],
+            "/users/me/watched/movies": [[]],
+            "/users/me/ratings/shows": [[]],
+            "/users/me/ratings/movies": [[]],
+        },
+    )
+    code, _, _, _ = _run(trakt_watch_history, monkeypatch, capsys, tmp_path)
+    assert code == 0
+    shows_urls = [url for url in fetched if "watched/shows" in url]
+    assert shows_urls and all("extended=progress" in url for url in shows_urls)
 
 
 def test_missing_seasons_are_unknown_not_zero(trakt_watch_history, monkeypatch, capsys, tmp_path):
@@ -524,7 +547,7 @@ def test_missing_seasons_are_unknown_not_zero(trakt_watch_history, monkeypatch, 
     assert code == 0
     counts = {s["slug"]: s["episodes_watched"] for s in json.loads(out)["shows"]}
     assert counts == {"show-1": None, "show-2": 2}
-    assert "1 of 2 shows came back without per-season data" in err
+    assert "1 of 2 shows came back without per-season progress" in err
 
 
 def test_an_endless_page_count_is_refused(trakt_watch_history, monkeypatch, capsys, tmp_path):

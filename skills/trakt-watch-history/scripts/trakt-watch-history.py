@@ -58,7 +58,9 @@ SCHEMA_VERSION = 2
 
 # Trakt pages its list endpoints. Every list is read page by page until
 # the `X-Pagination-Page-Count` header says it is the last page, or, when
-# the header is absent, until a short page; MAX_PAGES bounds the crawl.
+# the header is absent, until an empty page: Trakt's effective page size
+# can be smaller than the requested limit, so a short page proves nothing.
+# MAX_PAGES bounds the crawl.
 PAGE_LIMIT = 100
 MAX_PAGES = 100
 
@@ -109,15 +111,18 @@ def _build_headers() -> dict:
     }
 
 
-def api_get_all(path: str, headers: dict) -> list:
+def api_get_all(path: str, headers: dict, extended: str | None = None) -> list:
     """Every item of a paged Trakt list endpoint."""
     items: list = []
+    query = f"extended={extended}&" if extended else ""
     for page in range(1, MAX_PAGES + 1):
-        data, page_count = _get_with_page_count(f"{path}?page={page}&limit={PAGE_LIMIT}", headers)
+        data, page_count = _get_with_page_count(
+            f"{path}?{query}page={page}&limit={PAGE_LIMIT}", headers
+        )
         if not isinstance(data, list):
             fail(f"Trakt API {path} page {page} returned {type(data).__name__}, not a list")
         items.extend(data)
-        last = page >= page_count if page_count is not None else len(data) < PAGE_LIMIT
+        last = page >= page_count if page_count is not None else not data
         if last:
             return items
     fail(f"Trakt API {path} has more than {MAX_PAGES} pages; refusing an unbounded crawl")
@@ -250,8 +255,9 @@ def main():
     out_path = os.environ.get("TRAKT_HISTORY_OUT", DEFAULT_OUTPUT_PATH)
     headers = _build_headers()
 
-    # Watched shows (with play counts)
-    watched_shows = api_get_all("/users/me/watched/shows", headers)
+    # Watched shows. Trakt returns per-season progress only when asked
+    # for it with extended=progress.
+    watched_shows = api_get_all("/users/me/watched/shows", headers, extended="progress")
     shows = []
     without_seasons = 0
     for entry in watched_shows:
@@ -277,8 +283,8 @@ def main():
     if without_seasons:
         sys.stderr.write(
             f"trakt-watch-history: {without_seasons} of {len(shows)} shows came back without "
-            "per-season data, so their episodes_watched is null. Check that the gateway "
-            "forwards Trakt's seasons (the request must not carry extended=noseasons).\n"
+            "per-season progress despite extended=progress, so their episodes_watched is "
+            "null. Check that the gateway passes the query string through unchanged.\n"
         )
 
     # Watched movies
