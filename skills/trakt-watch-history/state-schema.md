@@ -3,20 +3,20 @@
 Stateful artifact per `jbaruch/coding-policy: stateful-artifacts`. Owner skill: **trakt-watch-history** — only this skill changes the shape or migrates records.
 
 - **Path:** `/workspace/group/trakt-history.json`
-- **Current `schema_version`:** 1
+- **Current `schema_version`:** 2
 
-## Record Shape (v1)
+## Record Shape (v2)
 
 ```json
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "shows": [
     {
       "title": "string",
       "year": "int | null",
       "trakt_id": "int | null",
       "slug": "string | null",
-      "episodes_watched": "int (aggregate count)",
+      "episodes_watched": "int (aggregate count) | null (Trakt returned no per-season data)",
       "last_watched": "ISO 8601 timestamp | null",
       "rating": "int 1-10 | null (Baruch's own rating)"
     }
@@ -52,3 +52,4 @@ Field promises: `shows` and `movies` are always present (possibly empty arrays) 
 - A record with a **newer** `schema_version` than the reader accepts means the reader is lagging: treat as no usable prior state (refresh via Step 1 of the consuming skill) and update the reader.
 - Only the owner skill migrates. Readers never rewrite the file.
 - Any shape change bumps `SCHEMA_VERSION` in `scripts/trakt-watch-history.py` and this document in the same change.
+- v2 (`jbaruch/nanoclaw-media#89`): every list is read across all its pages, and `episodes_watched` is `null` instead of `0` when Trakt returns no per-season data. Readers accept v1 and v2. In a v1 record a `0` is not evidence a show was never watched: v1 wrote `0` whenever the seasons were missing.
