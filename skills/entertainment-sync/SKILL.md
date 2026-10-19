@@ -79,7 +79,9 @@ Run only when Step 6 returned `"advance_cursor": true`; otherwise proceed to Ste
 python3 /home/node/.claude/skills/tessl__entertainment-sync/scripts/stamp-cursor.py
 ```
 
-Atomic-writes `/workspace/group/state/entertainment-sync-cursor.json` with `{"schema_version": 1, "last_run": "<now UTC ISO Z>"}`. Stdout: `{"status": "stamped", "last_run": "<iso>", "cursor_path": "<path>"}`. Proceed to Step 8.
+Atomic-writes `/workspace/group/state/entertainment-sync-cursor.json` with `{"schema_version": 1, "last_run": "<now UTC ISO Z>"}`. Stdout: `{"status": "stamped", "last_run": "<iso>", "cursor_path": "<path>"}`. Proceed to Step 8 on exit 0.
+
+Exit 2 (write failed): surface stderr quoted inside a short Russian sentence, and emit `<internal>entertainment-sync ran <utc_date>: partial — cursor not stamped</internal>` as your final turn text. Finish here.
 
 ## Step 8 — Observable silence
 

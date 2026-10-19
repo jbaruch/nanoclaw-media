@@ -35,6 +35,8 @@ echo '<JSON>' | python3 /home/node/.claude/skills/tessl__audible-backup/scripts/
 
 The script decides which books are eligible to append — the contract lives in its top-of-file docstring. Outputs a JSON summary: `appended`, `skipped_existing`, `skipped_failed`, `csv_total`, `books`.
 
+Exit 1: surface its stderr verbatim via `mcp__nanoclaw__send_message` and finish here, without reporting any book as added.
+
 Proceed immediately to Step 4.
 
 ## Step 4 — Report results

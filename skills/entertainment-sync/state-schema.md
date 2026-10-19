@@ -26,13 +26,14 @@ Per `coding-policy: stateful-artifacts`.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `schema_version` | integer | yes | Currently `1`. |
-| `last_run` | string | yes | UTC ISO-8601 with trailing `Z`. The wall-clock instant the most recent successful bundle completed Steps 1-5 and reached Step 6 (advance cursor). |
+| `last_run` | string | yes | UTC ISO-8601 with trailing `Z`. The wall-clock instant the most recent clean run stamped the cursor: Step 6's summary returned `advance_cursor: true` and Step 7 ran. |
 
 ## Lifecycle
 
 - **First run** — cursor absent. Precheck wakes with `reason: "no_cursor"`.
 - **Steady state** — gates `wake_agent: false` while `last_run` is newer than the cadence cap (`CADENCE` in `scripts/precheck-entertainment-sync.py`).
-- **Bundle failure** — any of Steps 1-5 fails; Step 6 is skipped intentionally. Cursor stays at its prior value.
+- **Bundle failure** — any of Steps 1-5 fails; the run continues, Step 6 summarizes it with `advance_cursor: false`, and Step 7 is skipped. Cursor stays at its prior value.
+- **Stamp failure** — Step 7's `stamp-cursor.py` exits 2; the run finishes with a failure result and the cursor stays at its prior value.
 - **Cursor corruption** — fail-open with `cursor_error`. Next successful bundle self-heals.
 
 ## Migration policy

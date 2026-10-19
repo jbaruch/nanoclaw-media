@@ -21,9 +21,8 @@ applyTo: "skills/**/SKILL.md — when a skill step runs one of this plugin's scr
 
 ## Input/Output Contract
 
-- Each target's top-of-file docstring owns its arguments, stdout shape and exit codes
-- The calling step quotes that contract; it never restates the script's internal logic
-- A target that writes JSON emits it on stdout; diagnostics go to stderr
+- Each target's top-of-file docstring documents its arguments, stdout shape and exit codes
+- Script and calling-step requirements beyond that: see `coding-policy: script-delegation` and `coding-policy: script-as-black-box`
 
 ## Regression Coverage
 

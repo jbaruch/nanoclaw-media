@@ -15,9 +15,9 @@ Outputs a JSON summary to stdout: {appended, skipped_existing,
 skipped_failed, csv_total, books} — all fields present on every run,
 including no-op runs with zero eligible books.
 
-Exit 0 after printing the summary. Any failure (stdin that is not a JSON
-object, a CSV or lock-file I/O error) exits non-zero with Python's
-traceback on stderr and nothing on stdout.
+Exit 0 after printing the summary. Exit 1 when stdin is not a JSON object
+with a `books` array of objects, or the CSV or its lock file cannot be
+updated: a diagnostic on stderr, nothing on stdout, the CSV unchanged.
 
 Concurrency: read-existing → check-new → append is wrapped in an advisory
 exclusive file lock (fcntl.flock) so two simultaneous runs can't both see the
@@ -270,19 +270,39 @@ def append_books_locked(csv_path, books):
 
 
 def main():
-    data = json.load(sys.stdin)
+    try:
+        data = json.load(sys.stdin)
+    except json.JSONDecodeError as exc:
+        sys.stderr.write(
+            f"csv-append: stdin is not JSON ({exc}); pipe the audible_backup tool output in\n"
+        )
+        return 1
+    if not isinstance(data, dict):
+        sys.stderr.write("csv-append: stdin must be a JSON object with a `books` array\n")
+        return 1
 
     # `or []` guards a literal `"books": null` in the payload, which
     # data.get() would pass through and partition_by_status() would
     # then try to iterate.
-    books, failed = partition_by_status(data.get("books") or [])
+    raw_books = data.get("books") or []
+    if not isinstance(raw_books, list) or any(not isinstance(b, dict) for b in raw_books):
+        sys.stderr.write("csv-append: `books` must be an array of objects\n")
+        return 1
+    books, failed = partition_by_status(raw_books)
 
     # No early return for an empty eligible list: the locked path handles
     # it without touching the CSV (no header, no rows, no CSV creation —
     # only the sibling lock file is opened) and still yields the existing
     # count, so `csv_total` is present in the no-op case too and the
     # output contract stays uniform.
-    appended, existing_count, skipped = append_books_locked(CSV_PATH, books)
+    try:
+        appended, existing_count, skipped = append_books_locked(CSV_PATH, books)
+    except OSError as exc:
+        sys.stderr.write(
+            f"csv-append: cannot update {CSV_PATH} ({exc}); check that its directory "
+            "exists and is writable\n"
+        )
+        return 1
 
     print(
         json.dumps(
@@ -295,7 +315,8 @@ def main():
             }
         )
     )
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

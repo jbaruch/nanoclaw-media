@@ -16,6 +16,8 @@ Locks down the documented contract per `coding-policy: testing-standards`:
 import csv
 import json
 
+import pytest
+
 
 class _FakeStdin:
     def __init__(self, text):
@@ -303,3 +305,44 @@ def test_null_books_treated_as_empty(csv_append, monkeypatch, capsys):
         "books": [],
     }
     assert not csv_path.exists()
+
+
+def _run_raw(module, monkeypatch, capsys, text):
+    monkeypatch.setattr("sys.argv", ["csv-append.py"])
+    monkeypatch.setattr("sys.stdin", _FakeStdin(text))
+    code = module.main()
+    captured = capsys.readouterr()
+    return code, captured.out, captured.err
+
+
+@pytest.mark.parametrize(
+    ("stdin", "diagnostic"),
+    [
+        ("not json", "stdin is not JSON"),
+        ("[]", "must be a JSON object"),
+        ('{"books": "x"}', "`books` must be an array of objects"),
+        ('{"books": [1]}', "`books` must be an array of objects"),
+    ],
+    ids=["not-json", "not-object", "books-not-list", "book-not-object"],
+)
+def test_malformed_input_exits_1_without_touching_the_csv(
+    csv_append, monkeypatch, capsys, stdin, diagnostic
+):
+    module, csv_path = csv_append
+    code, out, err = _run_raw(module, monkeypatch, capsys, stdin)
+    assert code == 1
+    assert out == ""
+    assert diagnostic in err
+    assert not csv_path.exists()
+
+
+def test_an_unwritable_csv_exits_1_with_an_actionable_diagnostic(
+    csv_append, monkeypatch, capsys, tmp_path
+):
+    module, _ = csv_append
+    monkeypatch.setattr(module, "CSV_PATH", str(tmp_path / "missing-dir" / "books.csv"))
+    code, out, err = _run_raw(module, monkeypatch, capsys, json.dumps({"books": [_book("A1")]}))
+    assert code == 1
+    assert out == ""
+    assert "cannot update" in err
+    assert "writable" in err

@@ -1,9 +1,15 @@
 #!/usr/bin/env python3
 """Stamp the success cursor for `tessl__youtube-comment-check`.
 
-Atomic-writes `<state_dir>/youtube-comment-check-cursor.json` with the
-current UTC timestamp. The precheck reads this file's `last_run` to
-gate wake-ups by the cadence cap (value in the precheck).
+Usage:
+    stamp-cursor.py [--cursor PATH]
+
+`--cursor` defaults to `$YOUTUBE_COMMENT_CHECK_CURSOR`, else
+`<state_dir>/youtube-comment-check-cursor.json`.
+
+Atomic-writes the cursor file with the current UTC timestamp. The precheck
+reads this file's `last_run` to gate wake-ups by the cadence cap (value in
+the precheck).
 
 Schema (v1):
     {
