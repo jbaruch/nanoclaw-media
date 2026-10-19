@@ -20,8 +20,9 @@ Optional environment:
 On success, writes the record atomically to TRAKT_HISTORY_OUT and also
 prints it to stdout. Output shape:
   {
-    "schema_version": 1,
+    "schema_version": 2,
     "shows": [{"title", "year", "trakt_id", "slug", "episodes_watched", "last_watched", "rating"}],
+    # episodes_watched is null when Trakt returned no per-season data
     "movies": [{"title", "year", "trakt_id", "slug", "last_watched", "rating"}],
     "stats": {"total_shows", "total_movies", "rated"},
     "fetched_at": "ISO 8601 UTC timestamp"
@@ -53,7 +54,15 @@ ERROR_PREVIEW_BYTES = 200
 # Version of the emitted trakt-history.json record shape, per
 # `jbaruch/coding-policy: stateful-artifacts`. Bump on any shape change;
 # the contract lives in skills/trakt-watch-history/state-schema.md.
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
+
+# Trakt pages its list endpoints. Every list is read page by page until
+# the `X-Pagination-Page-Count` header says it is the last page, or, when
+# the header is absent, until an empty page: Trakt's effective page size
+# can be smaller than the requested limit, so a short page proves nothing.
+# MAX_PAGES bounds the crawl.
+PAGE_LIMIT = 100
+MAX_PAGES = 100
 
 # Default destination for the persisted record. In-container this is the
 # shared owner-data mount; tests point TRAKT_HISTORY_OUT elsewhere.
@@ -102,7 +111,40 @@ def _build_headers() -> dict:
     }
 
 
-def api_get(path: str, headers: dict):
+def api_get_all(path: str, headers: dict, extended: str | None = None) -> list:
+    """Every item of a paged Trakt list endpoint."""
+    items: list = []
+    query = f"extended={extended}&" if extended else ""
+    for page in range(1, MAX_PAGES + 1):
+        data, page_count = _get_with_page_count(
+            f"{path}?{query}page={page}&limit={PAGE_LIMIT}", headers
+        )
+        if not isinstance(data, list):
+            fail(
+                f"Trakt API {path} page {page} returned {type(data).__name__}, not a list — "
+                "retry the fetch; if it persists, Trakt or the OneCLI gateway changed the "
+                "response shape for this endpoint"
+            )
+        items.extend(data)
+        last = page >= page_count if page_count is not None else not data
+        if last:
+            return items
+    fail(
+        f"Trakt API {path} has more than {MAX_PAGES} pages; refusing an unbounded crawl — "
+        "check that the gateway preserves the page query parameter and the "
+        "X-Pagination-Page-Count header, or raise MAX_PAGES (and its tests) if the "
+        "account really holds that much history"
+    )
+
+
+def _page_count(value) -> int | None:
+    try:
+        return int(value) if value is not None else None
+    except ValueError:
+        return None
+
+
+def _get_with_page_count(path: str, headers: dict):
     req = urllib.request.Request(
         f"https://api.trakt.tv{path}",
         headers=headers,
@@ -110,6 +152,7 @@ def api_get(path: str, headers: dict):
     try:
         with urllib.request.urlopen(req, timeout=TIMEOUT_SECONDS) as resp:
             raw = resp.read()
+            page_count = _page_count(resp.headers.get("X-Pagination-Page-Count"))
     except urllib.error.HTTPError as e:
         # Bound the error-body read so a multi-MB HTML/JSON error page
         # from Trakt (or the gateway) doesn't force us to pull the whole
@@ -176,7 +219,7 @@ def api_get(path: str, headers: dict):
     # contract on stdout.
     decoded = raw.decode("utf-8", errors="replace")
     try:
-        return json.loads(decoded)
+        return json.loads(decoded), page_count
     except json.JSONDecodeError as e:
         # Build the preview from raw bytes, not the decoded string, so
         # `ERROR_PREVIEW_BYTES` is a consistent byte bound across both
@@ -221,12 +264,20 @@ def main():
     out_path = os.environ.get("TRAKT_HISTORY_OUT", DEFAULT_OUTPUT_PATH)
     headers = _build_headers()
 
-    # Watched shows (with play counts)
-    watched_shows = api_get("/users/me/watched/shows", headers)
+    # Watched shows. Trakt returns per-season progress only when asked
+    # for it with extended=progress.
+    watched_shows = api_get_all("/users/me/watched/shows", headers, extended="progress")
     shows = []
+    without_seasons = 0
     for entry in watched_shows:
         show = entry.get("show", {})
-        eps = sum(len(season.get("episodes", [])) for season in entry.get("seasons", []))
+        seasons = entry.get("seasons")
+        if isinstance(seasons, list):
+            eps = sum(len(season.get("episodes", [])) for season in seasons)
+        else:
+            # Unknown, never zero: a 0 would read as "never watched".
+            eps = None
+            without_seasons += 1
         shows.append(
             {
                 "title": show.get("title"),
@@ -238,8 +289,15 @@ def main():
             }
         )
 
+    if without_seasons:
+        sys.stderr.write(
+            f"trakt-watch-history: {without_seasons} of {len(shows)} shows came back without "
+            "per-season progress despite extended=progress, so their episodes_watched is "
+            "null. Check that the gateway passes the query string through unchanged.\n"
+        )
+
     # Watched movies
-    watched_movies = api_get("/users/me/watched/movies", headers)
+    watched_movies = api_get_all("/users/me/watched/movies", headers)
     movies = []
     for entry in watched_movies:
         movie = entry.get("movie", {})
@@ -255,11 +313,11 @@ def main():
 
     # Ratings (shows and movies)
     ratings = {}
-    for item in api_get("/users/me/ratings/shows", headers):
+    for item in api_get_all("/users/me/ratings/shows", headers):
         slug = item.get("show", {}).get("ids", {}).get("slug")
         if slug:
             ratings[slug] = item.get("rating")
-    for item in api_get("/users/me/ratings/movies", headers):
+    for item in api_get_all("/users/me/ratings/movies", headers):
         slug = item.get("movie", {}).get("ids", {}).get("slug")
         if slug:
             ratings[slug] = item.get("rating")
