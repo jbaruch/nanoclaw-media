@@ -26,11 +26,7 @@ The script prints JSON (field names shown schematically, not literal JSON):
 }
 ```
 
-This skill owns the persisted `trakt-history.json` record shape. The versioned contract, field promises, and migration policy live in:
-
-```text
-skills/trakt-watch-history/state-schema.md
-```
+This skill owns the persisted `trakt-history.json` record shape. The versioned contract, field promises, and migration policy live in [state-schema.md](state-schema.md).
 
 > **Note on genre data:** The JSON schema does not include genre fields. Use general knowledge when confident (e.g., *Breaking Bad* = crime/drama) and be explicit about uncertainty for less-known titles — if a title's genre isn't clear, say so rather than guessing. No additional API call is available for genre classification.
 
@@ -42,12 +38,12 @@ Branch on the result:
 
 ## Step 2 — Analyze Patterns
 
-Identify patterns from the returned data (no genre field in the schema — work with what's there first, layer genre inferences only where you're confident):
+Identify patterns from the returned data:
 
 - **Primary signal: ratings.** Prioritize titles rated 8+ / 10 as the "strong positive" set. Note rewatch signal from `episodes_watched` on shows (binge or revisit); a `null` count is unknown, not zero.
 - **Temporal signal: `last_watched` + `year`.** Recent entries vs. older ones, era clusters (e.g., run of 2000s titles), release-year patterns.
 - **Title/creator signal.** Look for repeating franchises, directors/creators you can identify from the titles, adaptations of the same source material.
-- **Genre, only where confident.** For titles you know well (`Breaking Bad` = crime/drama), you can layer a genre inference. For less-known titles, don't guess — note uncertainty instead of inventing a genre tag, and fall back to the rating/title/era signals above.
+- **Genre, only where confident** (Step 1 note); otherwise rely on the rating, title, and era signals above.
 
 Proceed immediately to Step 3.
 
@@ -58,8 +54,7 @@ Suggest titles not already in the user's history that match the patterns you act
 - Lead with the strongest signal you could verify (e.g., "all five of your 9+ entries are from the same creator" beats "you like sci-fi" if you're not sure about the genre).
 - Offer a secondary suggestion from a weaker-but-positively-rated cluster for variety.
 - If ratings are sparse, fall back to `last_watched` recency as a preference signal.
+- Exclude every title already present in `shows` or `movies`.
 - **Presentation:** Provide 3–5 primary recommendations and 1–2 secondary ones. For each title include its name, year, and a one-sentence reason tied to the user's viewing history (e.g., shared creator, era, or themes with a title they rated highly). If a rec rests on a genre inference, say so explicitly so the user can correct you.
-
-**Example approach:** if a user has rated five sci-fi shows 9/10 and two crime dramas 7/10, recommend sci-fi titles first (e.g., shows sharing cast, creators, or themes with their top-rated entries), then offer one or two crime dramas as an alternative. Always exclude titles already present in `shows` or `movies`.
 
 Finish here — the skill is complete.
