@@ -11,7 +11,7 @@ script: "scripts/precheck-entertainment-sync.py"
 
 Process steps in order. Do not skip ahead.
 
-A failed step does not stop the run: surface it and continue. Track each step as ran or failed for Step 7.
+A failed step does not stop the run: surface it and continue. Track each step as ran or failed for Step 6.
 
 A step failed when its script exits non-zero or its `Skill(...)` invocation fails, and also when the inner skill reports an operational error itself: it surfaced an error message, or its own closing line reports an error instead of a clean or surfaced run.
 
@@ -55,21 +55,29 @@ Invoke `Skill(skill: "tessl__recommend-books")`. Sends on good matches; silent o
 
 If invocation fails, surface via `mcp__nanoclaw__send_message` and mark Step 5 failed. Proceed to Step 6.
 
-## Step 6 — Advance the success cursor
+## Step 6 — Summarize the run
 
-Run only if Steps 1-5 all ran without failing; otherwise skip to Step 7, leaving the cursor so the next fire retries. Run:
+Pass today's UTC date, the failed steps (comma list, or `none`) and whether any inner skill surfaced something:
+
+```bash
+python3 /home/node/.claude/skills/tessl__entertainment-sync/scripts/summarize-run.py \
+  --date "$UTC_DATE" --failed "$FAILED_STEPS" [--surfaced]
+```
+
+Stdout: `{"advance_cursor": bool, "internal": "<internal>…</internal>"}`. Proceed to Step 7.
+
+Exit 2 (bad date or step list): surface stderr inside a short Russian sentence, skip Step 7, and emit `<internal>entertainment-sync ran <utc_date>: partial — summary failed</internal>` as your final turn text. Finish here.
+
+## Step 7 — Advance the success cursor
+
+Run only when Step 6 returned `"advance_cursor": true`; otherwise proceed to Step 8 and leave the cursor unchanged.
 
 ```bash
 python3 /home/node/.claude/skills/tessl__entertainment-sync/scripts/stamp-cursor.py
 ```
 
-Atomic-writes `/workspace/group/state/entertainment-sync-cursor.json` with `{"schema_version": 1, "last_run": "<now UTC ISO Z>"}`. Stdout: `{"status": "stamped", "last_run": "<iso>", "cursor_path": "<path>"}`. Proceed to Step 7.
+Atomic-writes `/workspace/group/state/entertainment-sync-cursor.json` with `{"schema_version": 1, "last_run": "<now UTC ISO Z>"}`. Stdout: `{"status": "stamped", "last_run": "<iso>", "cursor_path": "<path>"}`. Proceed to Step 8.
 
-## Step 7 — Observable silence
+## Step 8 — Observable silence
 
-Emit exactly one `<internal>` line so the post-fire silent-success watchdog can read `task_run_logs.result` directly. `<utc_date>` is today's UTC date in `YYYY-MM-DD`. The wrapper adds no user-facing output.
-
-- Every step ran: `<internal>entertainment-sync ran <utc_date>: clean</internal>` (no inner skill surfaced) or `<internal>entertainment-sync ran <utc_date>: surfaced</internal>` (at least one did).
-- Any step failed: `<internal>entertainment-sync ran <utc_date>: partial — ran <steps>; failed <steps></internal>`, listing step numbers.
-
-Finish here.
+Emit Step 6's `internal` line verbatim as your final turn text. The wrapper adds no user-facing output. Finish here.
