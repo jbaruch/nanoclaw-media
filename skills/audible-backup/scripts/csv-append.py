@@ -15,9 +15,11 @@ Outputs a JSON summary to stdout: {appended, skipped_existing,
 skipped_failed, csv_total, books} — all fields present on every run,
 including no-op runs with zero eligible books.
 
-Exit 0 after printing the summary. Exit 1 when stdin is not a JSON object
-with a `books` array of objects, or the CSV or its lock file cannot be
-updated: a diagnostic on stderr, nothing on stdout, the CSV unchanged.
+Exit 0 after printing the summary; a missing or null `books` is an empty
+run. Exit 1 when stdin is not a JSON object, `books` is present but not an
+array of objects, or the CSV or its lock file cannot be updated: a
+diagnostic on stderr, nothing on stdout. The CSV is replaced atomically
+from a sibling temp file, so a failed write leaves it unchanged.
 
 Concurrency: read-existing → check-new → append is wrapped in an advisory
 exclusive file lock (fcntl.flock) so two simultaneous runs can't both see the
@@ -28,7 +30,9 @@ import csv
 import fcntl
 import json
 import os
+import shutil
 import sys
+import tempfile
 
 CSV_PATH = os.environ.get("BOOKS_CSV", "/workspace/group/books-library.csv")
 
@@ -201,6 +205,35 @@ def get_existing_asins(csv_path):
     return asins
 
 
+def _replace_with_appended(csv_path, rows, needs_header):
+    """Write the current CSV plus `rows` to a sibling temp file, then swap it in.
+
+    All-or-nothing: an I/O error leaves the CSV exactly as it was. The temp
+    file takes the CSV's mode (0644 for a new CSV) and lives in the same
+    directory so `os.replace` is atomic.
+    """
+    directory = os.path.dirname(os.path.abspath(csv_path))
+    mode = os.stat(csv_path).st_mode & 0o777 if os.path.exists(csv_path) else 0o644
+    fd, tmp_path = tempfile.mkstemp(dir=directory, prefix=".books-", suffix=".csv.tmp")
+    try:
+        with os.fdopen(fd, "w", newline="", encoding="utf-8") as out:
+            if not needs_header:
+                with open(csv_path, newline="", encoding="utf-8") as current:
+                    shutil.copyfileobj(current, out)
+            writer = csv.DictWriter(out, fieldnames=HEADERS, quoting=csv.QUOTE_ALL)
+            if needs_header:
+                writer.writeheader()
+            writer.writerows(rows)
+            out.flush()
+            os.fsync(out.fileno())
+        os.chmod(tmp_path, mode)
+        os.replace(tmp_path, csv_path)
+    except OSError:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+        raise
+
+
 def append_books_locked(csv_path, books):
     """
     Append new book rows to CSV under an exclusive advisory lock.
@@ -247,21 +280,17 @@ def append_books_locked(csv_path, books):
                 # fails. Checked inside the lock so two concurrent
                 # first-run attempts can't both write headers.
                 needs_header = not os.path.exists(csv_path) or os.path.getsize(csv_path) == 0
-                with open(csv_path, "a", newline="", encoding="utf-8") as f:
-                    writer = csv.DictWriter(f, fieldnames=HEADERS, quoting=csv.QUOTE_ALL)
-                    if needs_header:
-                        writer.writeheader()
-                    for book in new_books:
-                        row = map_book(book)
-                        writer.writerow(row)
-                        appended.append(
-                            {
-                                "asin": row["ASIN"],
-                                "title": row["Title"],
-                                "author": row["Author"],
-                                "series": row["Series Name"],
-                            }
-                        )
+                rows = [map_book(book) for book in new_books]
+                _replace_with_appended(csv_path, rows, needs_header)
+                appended = [
+                    {
+                        "asin": row["ASIN"],
+                        "title": row["Title"],
+                        "author": row["Author"],
+                        "series": row["Series Name"],
+                    }
+                    for row in rows
+                ]
 
             skipped = len(books) - len(appended)
             return appended, len(existing), skipped
@@ -281,10 +310,11 @@ def main():
         sys.stderr.write("csv-append: stdin must be a JSON object with a `books` array\n")
         return 1
 
-    # `or []` guards a literal `"books": null` in the payload, which
-    # data.get() would pass through and partition_by_status() would
-    # then try to iterate.
-    raw_books = data.get("books") or []
+    # A missing or null `books` is a no-op run; any other non-array is
+    # malformed and must not read as a clean empty backup.
+    raw_books = data.get("books")
+    if raw_books is None:
+        raw_books = []
     if not isinstance(raw_books, list) or any(not isinstance(b, dict) for b in raw_books):
         sys.stderr.write("csv-append: `books` must be an array of objects\n")
         return 1

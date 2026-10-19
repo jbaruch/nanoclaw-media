@@ -57,7 +57,7 @@ If invocation fails, surface via `mcp__nanoclaw__send_message` and mark Step 5 f
 
 ## Step 6 — Summarize the run
 
-Run it with every step that ran cleanly:
+Run it with the failed steps accumulated in Steps 1-5 (`none` when every step ran):
 
 ```bash
 python3 /home/node/.claude/skills/tessl__entertainment-sync/scripts/summarize-run.py \

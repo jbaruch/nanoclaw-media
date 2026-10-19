@@ -322,8 +322,21 @@ def _run_raw(module, monkeypatch, capsys, text):
         ("[]", "must be a JSON object"),
         ('{"books": "x"}', "`books` must be an array of objects"),
         ('{"books": [1]}', "`books` must be an array of objects"),
+        ('{"books": {}}', "`books` must be an array of objects"),
+        ('{"books": false}', "`books` must be an array of objects"),
+        ('{"books": 0}', "`books` must be an array of objects"),
+        ('{"books": ""}', "`books` must be an array of objects"),
     ],
-    ids=["not-json", "not-object", "books-not-list", "book-not-object"],
+    ids=[
+        "not-json",
+        "not-object",
+        "books-not-list",
+        "book-not-object",
+        "books-empty-object",
+        "books-false",
+        "books-zero",
+        "books-empty-string",
+    ],
 )
 def test_malformed_input_exits_1_without_touching_the_csv(
     csv_append, monkeypatch, capsys, stdin, diagnostic
@@ -346,3 +359,42 @@ def test_an_unwritable_csv_exits_1_with_an_actionable_diagnostic(
     assert out == ""
     assert "cannot update" in err
     assert "writable" in err
+
+
+@pytest.mark.parametrize("stdin", ["{}", '{"books": null}'], ids=["missing", "null"])
+def test_missing_or_null_books_is_an_empty_run(csv_append, monkeypatch, capsys, stdin):
+    module, csv_path = csv_append
+    code, out, _ = _run_raw(module, monkeypatch, capsys, stdin)
+    assert code == 0
+    assert json.loads(out)["appended"] == 0
+    assert not csv_path.exists()
+
+
+def test_a_failed_write_leaves_the_csv_unchanged(csv_append, monkeypatch, capsys):
+    """#92 review: the exit-1 contract promises an untouched CSV."""
+    module, csv_path = csv_append
+    code, _, _ = _run(module, monkeypatch, capsys, {"books": [_book("A1")]})
+    assert code == 0
+    before = csv_path.read_bytes()
+
+    def broken_fsync(_fd):
+        raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr(module.os, "fsync", broken_fsync)
+    code, out, err = _run(module, monkeypatch, capsys, {"books": [_book("B2"), _book("C3")]})
+
+    assert code == 1
+    assert out == ""
+    assert "No space left on device" in err
+    assert csv_path.read_bytes() == before
+    assert [p.name for p in csv_path.parent.iterdir() if p.name.endswith(".tmp")] == []
+
+
+def test_an_append_keeps_the_csv_mode(csv_append, monkeypatch, capsys):
+    module, csv_path = csv_append
+    _run(module, monkeypatch, capsys, {"books": [_book("A1")]})
+    csv_path.chmod(0o640)
+    _run(module, monkeypatch, capsys, {"books": [_book("B2")]})
+    assert csv_path.stat().st_mode & 0o777 == 0o640
+    with open(csv_path, newline="", encoding="utf-8") as f:
+        assert [row["ASIN"] for row in csv.DictReader(f)] == ["A1", "B2"]
