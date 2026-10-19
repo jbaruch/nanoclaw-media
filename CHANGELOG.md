@@ -1,5 +1,9 @@
 # Changelog
 
+### Added — a rule declaring the skill script paths
+
+Skill steps run this plugin's scripts at `/home/node/.claude/skills/tessl__<name>/scripts/<script>`, the path NanoClaw's container runner installs each skill at. The policy reviewer now requires a plugin-owned rule before it accepts such a lookup under coding-policy's Scoped Plugin Contracts, and the plugin had no rules at all. `rules/skill-script-paths.md` declares the authored scope (every media `SKILL.md`), the co-shipped targets (a declared skill's `skills/<name>/scripts/<script>`) and the contract (each script's docstring). `tests/test_skill_script_paths.py` resolves every such path in every `SKILL.md` to a declared skill and an existing script, so a renamed or missing script fails CI instead of failing in the container.
+
 ### Fixed — a Trakt failure no longer stops the Audible backup and book recommendations (#90)
 
 `entertainment-sync` stopped the whole run when Step 1's Trakt history fetch failed, so Steps 4 (Audible backup) and 5 (book recommendations), which never touch Trakt, were skipped too. Trakt has returned 401 every week since 2026-08-16, so for two months those steps ran only when the agent started them separately. A failed step is now surfaced and the run continues, including show recommendations, which retry the Trakt refresh themselves and fall back to the cached history with a staleness note. A step also counts as failed when its inner skill reports an operational error while finishing normally. The cursor still advances only when every step ran cleanly, so the next fire retries, and the final `<internal>` line lists which steps ran and which failed. The cursor decision and that line come from a new tested script, `summarize-run.py`.
