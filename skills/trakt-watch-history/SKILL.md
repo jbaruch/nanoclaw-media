@@ -26,7 +26,11 @@ The script prints JSON (field names shown schematically, not literal JSON):
 }
 ```
 
-This skill owns the persisted `trakt-history.json` record shape. The versioned contract, field promises, and migration policy live in [state-schema.md](state-schema.md).
+This skill owns the persisted `trakt-history.json` record shape. The versioned contract, field promises, and migration policy live in [state-schema.md](state-schema.md):
+
+```text
+skills/trakt-watch-history/state-schema.md
+```
 
 > **Note on genre data:** The JSON schema does not include genre fields. Use general knowledge when confident (e.g., *Breaking Bad* = crime/drama) and be explicit about uncertainty for less-known titles — if a title's genre isn't clear, say so rather than guessing. No additional API call is available for genre classification.
 

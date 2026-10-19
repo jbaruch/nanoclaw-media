@@ -2,7 +2,7 @@
 
 ### Fixed — trakt-watch-history passes the skill-review gate again
 
-The #92 publish stopped at the skill-review gate: touching `trakt-watch-history.py` re-reviewed its skill, which scored 84 against the 85 threshold. The SKILL now links `state-schema.md` relatively instead of naming it in a text block, states the genre guidance once, and drops the Step 3 example that restated its bullets; the exclusion of already-watched titles is its own bullet. It reviews at 89.
+The #92 publish stopped at the skill-review gate: touching `trakt-watch-history.py` re-reviewed its skill, which scored 84 against the 85 threshold. The SKILL now links `state-schema.md` relatively as well as naming it in its typed repo-path block, states the genre guidance once, and drops the Step 3 example that restated its bullets; the exclusion of already-watched titles is its own bullet. It reviews at 88.
 
 ### Added — a rule declaring the skill script paths
 
