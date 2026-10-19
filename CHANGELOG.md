@@ -1,5 +1,7 @@
 # Changelog
 
+## 0.1.67 — 2026-10-19
+
 ### Fixed — trakt-watch-history passes the skill-review gate again
 
 The #92 publish stopped at the skill-review gate: touching `trakt-watch-history.py` re-reviewed its skill, which scored 84 against the 85 threshold. The SKILL now states the genre guidance once, and drops the Step 3 example that restated its bullets; the exclusion of already-watched titles is its own bullet. It reviews at 92.
