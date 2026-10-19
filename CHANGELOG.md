@@ -2,7 +2,7 @@
 
 ### Fixed — a Trakt failure no longer stops the Audible backup and book recommendations (#90)
 
-`entertainment-sync` stopped the whole run when Step 1's Trakt history fetch failed, so Steps 4 (Audible backup) and 5 (book recommendations), which never touch Trakt, were skipped too. Trakt has returned 401 every week since 2026-08-16, so for two months those steps ran only when the agent started them separately. A failed step is now surfaced and the run continues; only Step 3 (show recommendations), which reads Step 1's history, is skipped after a Trakt failure. The cursor still advances only when every step ran cleanly, so the next fire retries, and the final `<internal>` line lists which steps ran, failed and were skipped.
+`entertainment-sync` stopped the whole run when Step 1's Trakt history fetch failed, so Steps 4 (Audible backup) and 5 (book recommendations), which never touch Trakt, were skipped too. Trakt has returned 401 every week since 2026-08-16, so for two months those steps ran only when the agent started them separately. A failed step is now surfaced and the run continues, including show recommendations, which retry the Trakt refresh themselves and fall back to the cached history with a staleness note. A step also counts as failed when its inner skill reports an operational error while finishing normally. The cursor still advances only when every step ran cleanly, so the next fire retries, and the final `<internal>` line lists which steps ran and which failed.
 
 ## 0.1.66 — 2026-10-19
 

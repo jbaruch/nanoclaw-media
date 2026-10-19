@@ -11,7 +11,9 @@ script: "scripts/precheck-entertainment-sync.py"
 
 Process steps in order. Do not skip ahead.
 
-A failed step does not stop the run: surface it and continue. Only Step 3 depends on another step (Step 1's Trakt history) and is skipped when Step 1 fails. Track each step as ran, failed or skipped for Step 7.
+A failed step does not stop the run: surface it and continue. Track each step as ran or failed for Step 7.
+
+A step failed when its script exits non-zero or its `Skill(...)` invocation fails, and also when the inner skill reports an operational error itself: it surfaced an error message, or its own closing line reports an error instead of a clean or surfaced run.
 
 Run silently. Each inner skill handles its own surfacing. The wrapper adds no surfaces beyond cadence-cursor management.
 
@@ -27,7 +29,7 @@ python3 /home/node/.claude/skills/tessl__trakt-watch-history/scripts/trakt-watch
 
 Silent on success. Report on error (stdout `{"error": ...}` / non-zero exit) or `total_shows: 0` (if sync hasn't run yet, skip silently).
 
-If the script fails, surface its stdout/stderr verbatim via `mcp__nanoclaw__send_message`, mark Step 1 failed and Step 3 skipped, and proceed to Step 2. Otherwise mark Step 1 ran and proceed to Step 2.
+If the script fails, surface its stdout/stderr verbatim via `mcp__nanoclaw__send_message`, mark Step 1 failed, and proceed to Step 2. Otherwise mark Step 1 ran and proceed to Step 2.
 
 ## Step 2 — Check watchlist
 
@@ -37,9 +39,7 @@ If invocation fails, surface verbatim via `mcp__nanoclaw__send_message` and mark
 
 ## Step 3 — Show recommendations
 
-If Step 1 failed, skip this step and proceed to Step 4.
-
-Invoke `Skill(skill: "tessl__recommend-shows")`. Uses `trakt-history.json` from Step 1. Sends on good matches; silent otherwise.
+Invoke `Skill(skill: "tessl__recommend-shows")` even when Step 1 failed: it retries the Trakt refresh itself and falls back to the cached `trakt-history.json` with a staleness note. Sends on good matches; silent otherwise.
 
 If invocation fails, surface via `mcp__nanoclaw__send_message` and mark Step 3 failed. Proceed to Step 4.
 
@@ -70,6 +70,6 @@ Atomic-writes `/workspace/group/state/entertainment-sync-cursor.json` with `{"sc
 Emit exactly one `<internal>` line so the post-fire silent-success watchdog can read `task_run_logs.result` directly. `<utc_date>` is today's UTC date in `YYYY-MM-DD`. The wrapper adds no user-facing output.
 
 - Every step ran: `<internal>entertainment-sync ran <utc_date>: clean</internal>` (no inner skill surfaced) or `<internal>entertainment-sync ran <utc_date>: surfaced</internal>` (at least one did).
-- Any step failed or was skipped: `<internal>entertainment-sync ran <utc_date>: partial — ran <steps>; failed <steps>; skipped <steps></internal>`, listing step numbers, `none` for an empty list.
+- Any step failed: `<internal>entertainment-sync ran <utc_date>: partial — ran <steps>; failed <steps></internal>`, listing step numbers.
 
 Finish here.
