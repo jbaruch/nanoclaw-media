@@ -1,5 +1,9 @@
 # Changelog
 
+## [Unreleased]
+
+- Keep the runtime CI lane on Python 3.14.9 beside Python 3.15.1 and constrain Renovate to patch updates within the 3.14 lane.
+
 ## 0.1.67 — 2026-10-19
 
 ### Fixed — trakt-watch-history passes the skill-review gate again
