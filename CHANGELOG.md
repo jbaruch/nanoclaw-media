@@ -1,5 +1,7 @@
 # Changelog
 
+## 0.1.70 — 2026-10-22
+
 ### Changed — Preserve both Python interpreter lanes
 
 Keep the runtime CI lane on Python 3.14.9 beside Python 3.15.1. Match Renovate’s Python dependency name and constrain its 3.14 lane to patch updates.
