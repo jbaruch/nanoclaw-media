@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.80 — 2026-11-18
+
+- chore(renovate): drop the major update approval gate (#108)
+
 ## 0.1.79 — 2026-11-17
 
 - fix(youtube): call the YouTube API on youtube.googleapis.com (#107)
